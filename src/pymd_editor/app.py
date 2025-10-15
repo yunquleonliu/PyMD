@@ -15,6 +15,7 @@ from PyQt6.QtWidgets import (
     QToolBar,
     QTabWidget,
     QWidget,
+    QHBoxLayout,
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
@@ -22,6 +23,7 @@ from .renderer import MarkdownRenderer
 from .exporter import WordExporter, PDFExporter
 from .wysiwyg_editor import EnhancedWYSIWYGEditor
 from .three_column_layout import ThreeColumnLayout, AIAssistantPanel
+from .ai_framework import AIManager
 
 
 class MainWindow(QMainWindow):
@@ -68,9 +70,31 @@ class MainWindow(QMainWindow):
         # 2. WYSIWYG模式（专用编辑器）
         # 保持现有的WYSIWYG编辑器
         
+        # 初始化AI管理器
+        self.ai_manager = AIManager()
+        
+        # 连接AI信号
+        self.ai_assistant.ai_request.connect(self.ai_manager.process_request)
+        self.ai_manager.response_received.connect(self._on_ai_response)
+        self.ai_manager.status_changed.connect(self._on_ai_status_changed)
+        
+        # 为WYSIWYG模式创建AI助手容器
+        self.wysiwyg_container = QWidget()
+        wysiwyg_layout = QHBoxLayout(self.wysiwyg_container)
+        wysiwyg_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # WYSIWYG编辑器占主要部分
+        wysiwyg_layout.addWidget(self.wysiwyg_editor, 3)
+        
+        # 可选的AI助手面板
+        self.wysiwyg_ai_assistant = AIAssistantPanel(self)
+        self.wysiwyg_ai_assistant.ai_request.connect(self.ai_manager.process_request)
+        self.wysiwyg_ai_assistant.hide()  # 默认隐藏
+        wysiwyg_layout.addWidget(self.wysiwyg_ai_assistant, 1)
+        
         # 添加标签页
         self.tab_widget.addTab(self.three_column_layout, self._get_text('three_column_mode'))
-        self.tab_widget.addTab(self.wysiwyg_editor, self._get_text('wysiwyg_mode'))
+        self.tab_widget.addTab(self.wysiwyg_container, self._get_text('wysiwyg_mode'))
         
         self.setCentralWidget(self.tab_widget)
 
@@ -188,6 +212,11 @@ class MainWindow(QMainWindow):
         self.export_word_action = QAction("导出 Word", self)
         self.export_word_action.setShortcut("Ctrl+Shift+W")
         self.export_word_action.triggered.connect(self.export_word)
+        
+        # 插入图片动作
+        self.insert_image_action = QAction("插入图片", self)
+        self.insert_image_action.setShortcut("Ctrl+Shift+I")
+        self.insert_image_action.triggered.connect(self.insert_image)
 
         # Language menu actions
         self.lang_chinese_action = QAction("中文", self)
@@ -198,12 +227,20 @@ class MainWindow(QMainWindow):
         self.lang_english_action = QAction("English", self)
         self.lang_english_action.setCheckable(True)
         self.lang_english_action.triggered.connect(lambda: self.set_language('en'))
+        
+        # AI助手切换动作
+        self.toggle_ai_action = QAction("显示AI助手", self)
+        self.toggle_ai_action.setCheckable(True)
+        self.toggle_ai_action.setChecked(False)
+        self.toggle_ai_action.triggered.connect(self._toggle_wysiwyg_ai)
 
     def _init_toolbar(self):
         tb = QToolBar("Main", self)
         tb.addAction(self.new_action)
         tb.addAction(self.open_action)
         tb.addAction(self.save_action)
+        tb.addSeparator()
+        tb.addAction(self.insert_image_action)
         tb.addAction(self.save_as_action)
         tb.addSeparator()
         tb.addAction(self.export_pdf_action)
@@ -226,10 +263,14 @@ class MainWindow(QMainWindow):
         file_menu.addSeparator()
         file_menu.addAction(self.export_pdf_action)
         file_menu.addAction(self.export_word_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.insert_image_action)
         
         # View menu
         view_menu = menubar.addMenu(self._get_text('view_menu'))
         view_menu.addAction(self.toggle_theme_action)
+        view_menu.addSeparator()
+        view_menu.addAction(self.toggle_ai_action)
         
         # Language menu
         lang_menu = menubar.addMenu(self._get_text('language_menu'))
@@ -403,6 +444,77 @@ class MainWindow(QMainWindow):
             return True
         resp = QMessageBox.question(self, "放弃更改?", "当前文档有未保存更改，是否放弃？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         return resp == QMessageBox.StandardButton.Yes
+
+
+        
+    def _on_ai_response(self, response):
+        """处理AI响应"""
+        if response.success:
+            self.ai_assistant.display_response(response.content)
+        else:
+            self.ai_assistant.set_status(f"Error: {response.error_message}")
+            
+    def _on_ai_status_changed(self, status: str):
+        """处理AI状态变化"""
+        self.ai_assistant.set_status(status)
+        if hasattr(self, 'wysiwyg_ai_assistant'):
+            self.wysiwyg_ai_assistant.set_status(status)
+        self.status.showMessage(status, 3000)
+        
+    def _toggle_wysiwyg_ai(self, checked: bool):
+        """切换WYSIWYG模式中的AI助手显示"""
+        if hasattr(self, 'wysiwyg_ai_assistant'):
+            if checked:
+                self.wysiwyg_ai_assistant.show()
+            else:
+                self.wysiwyg_ai_assistant.hide()
+                
+    def insert_image(self):
+        """插入图片到Markdown文档"""
+        # 打开文件对话框选择图片
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "选择图片文件",
+            "",
+            "图片文件 (*.png *.jpg *.jpeg *.gif *.bmp *.svg);;所有文件 (*)"
+        )
+        
+        if not file_path:
+            return
+            
+        # 获取文件名
+        import os
+        filename = os.path.basename(file_path)
+        
+        # 创建Markdown图片语法
+        current_tab = self.tab_widget.currentIndex()
+        
+        if current_tab == 0:  # 三栏模式
+            # 插入到文本编辑器
+            cursor = self.editor.textCursor()
+            if cursor.hasSelection():
+                # 如果有选中文本，将其作为alt文本
+                alt_text = cursor.selectedText()
+                markdown_image = f"![{alt_text}]({file_path})"
+            else:
+                markdown_image = f"![{filename}]({file_path})"
+            cursor.insertText(markdown_image)
+            
+        elif current_tab == 1:  # WYSIWYG模式
+            # 插入到WYSIWYG编辑器
+            if hasattr(self.wysiwyg_editor, 'insert_image'):
+                self.wysiwyg_editor.insert_image(file_path, filename)
+            else:
+                # 回退方案：显示消息
+                QMessageBox.information(
+                    self, 
+                    "图片插入", 
+                    f"图片路径: {file_path}\n请手动复制路径到编辑器"
+                )
+        
+        # 触发预览更新
+        self._render_timer.start()
+        self.status.showMessage(f"已插入图片: {filename}", 3000)
 
     # Events
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802

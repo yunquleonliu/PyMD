@@ -2,7 +2,7 @@
 import sys
 from pathlib import Path
 
-from pymd_editor.app import MainWindow
+from .app import MainWindow
 
 
 def main():
