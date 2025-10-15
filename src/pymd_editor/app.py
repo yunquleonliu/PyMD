@@ -40,7 +40,13 @@ class MainWindow(QMainWindow):
 
         # Core widgets
         self.editor = QTextEdit(self)
+        self._setup_drag_drop()  # 启用拖放功能
         self.preview = QWebEngineView(self)
+        # Enable image loading and mixed content
+        from PyQt6.QtWebEngineCore import QWebEngineSettings
+        settings = self.preview.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         self.wysiwyg_editor = EnhancedWYSIWYGEditor(self)
         self.renderer = MarkdownRenderer()
         self.word_exporter = WordExporter()
@@ -286,7 +292,9 @@ class MainWindow(QMainWindow):
 
     def render_preview(self):
         text = self.editor.toPlainText()
-        html = self.renderer.to_html(text, dark=self._dark_mode)
+        # Pass current file path as base path for image resolution
+        base_path = str(self._current_file) if self._current_file else None
+        html = self.renderer.to_html(text, dark=self._dark_mode, base_path=base_path)
         self.preview.setHtml(html)
         
         # 同时更新WYSIWYG编辑器（如果不是当前活动标签页则不更新，避免循环）
@@ -301,7 +309,8 @@ class MainWindow(QMainWindow):
         self.editor.blockSignals(False)
         
         # 更新预览
-        html = self.renderer.to_html(markdown_text, dark=self._dark_mode)
+        base_path = str(self._current_file) if self._current_file else None
+        html = self.renderer.to_html(markdown_text, dark=self._dark_mode, base_path=base_path)
         self.preview.setHtml(html)
         
         # 标记为已修改
@@ -486,6 +495,9 @@ class MainWindow(QMainWindow):
         import os
         filename = os.path.basename(file_path)
         
+        # 决定使用相对路径还是绝对路径
+        display_path = self._get_optimal_image_path(file_path)
+        
         # 创建Markdown图片语法
         current_tab = self.tab_widget.currentIndex()
         
@@ -495,9 +507,11 @@ class MainWindow(QMainWindow):
             if cursor.hasSelection():
                 # 如果有选中文本，将其作为alt文本
                 alt_text = cursor.selectedText()
-                markdown_image = f"![{alt_text}]({file_path})"
+                markdown_image = f"![{alt_text}]({display_path})"
             else:
-                markdown_image = f"![{filename}]({file_path})"
+                # 使用文件名作为默认alt文本
+                alt_text = os.path.splitext(filename)[0]  # 去掉扩展名
+                markdown_image = f"![{alt_text}]({display_path})"
             cursor.insertText(markdown_image)
             
         elif current_tab == 1:  # WYSIWYG模式
@@ -509,12 +523,98 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self, 
                     "图片插入", 
-                    f"图片路径: {file_path}\n请手动复制路径到编辑器"
+                    f"图片路径: {display_path}\n请手动复制路径到编辑器"
                 )
         
         # 触发预览更新
         self._render_timer.start()
         self.status.showMessage(f"已插入图片: {filename}", 3000)
+        
+    def _get_optimal_image_path(self, image_path: str) -> str:
+        """获取最优的图片路径（相对路径优先）"""
+        import os
+        from pathlib import Path
+        
+        if not self._current_file:
+            # 如果没有当前文件，使用绝对路径
+            return image_path
+            
+        try:
+            # 计算相对路径
+            current_dir = Path(self._current_file).parent
+            image_abs_path = Path(image_path)
+            
+            # 尝试计算相对路径
+            relative_path = os.path.relpath(image_abs_path, current_dir)
+            
+            # 如果相对路径不会向上太多层级（避免 ../../../这种路径）
+            if relative_path.count('..') <= 2:
+                return relative_path.replace('\\', '/')
+            else:
+                return image_path
+                
+        except (ValueError, OSError):
+            # 如果无法计算相对路径，使用绝对路径
+            return image_path
+            
+    def _setup_drag_drop(self):
+        """设置拖放功能"""
+        self.editor.setAcceptDrops(True)
+        
+        # 重写编辑器的拖放事件
+        original_drag_enter = self.editor.dragEnterEvent
+        original_drop = self.editor.dropEvent
+        
+        def drag_enter_event(event):
+            if event.mimeData().hasUrls():
+                # 检查是否包含图片文件
+                for url in event.mimeData().urls():
+                    if url.isLocalFile():
+                        file_path = url.toLocalFile()
+                        if self._is_image_file(file_path):
+                            event.acceptProposedAction()
+                            return
+            original_drag_enter(event)
+            
+        def drop_event(event):
+            if event.mimeData().hasUrls():
+                for url in event.mimeData().urls():
+                    if url.isLocalFile():
+                        file_path = url.toLocalFile()
+                        if self._is_image_file(file_path):
+                            self._insert_dropped_image(file_path, event.pos())
+                            event.acceptProposedAction()
+                            return
+            original_drop(event)
+            
+        self.editor.dragEnterEvent = drag_enter_event
+        self.editor.dropEvent = drop_event
+        
+    def _is_image_file(self, file_path: str) -> bool:
+        """检查文件是否为图片格式"""
+        import os
+        ext = os.path.splitext(file_path)[1].lower()
+        return ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg']
+        
+    def _insert_dropped_image(self, file_path: str, pos):
+        """插入拖放的图片"""
+        import os
+        
+        # 获取文件名和最优路径
+        filename = os.path.basename(file_path)
+        alt_text = os.path.splitext(filename)[0]
+        display_path = self._get_optimal_image_path(file_path)
+        
+        # 创建Markdown语法
+        markdown_image = f"![{alt_text}]({display_path})\n"
+        
+        # 在拖放位置插入
+        cursor = self.editor.cursorForPosition(pos)
+        cursor.insertText(markdown_image)
+        
+        # 触发预览更新
+        self._render_timer.start()
+        self.status.showMessage(f"已插入图片: {filename} (拖放)", 3000)
 
     # Events
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
