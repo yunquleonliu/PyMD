@@ -21,6 +21,7 @@ from PyQt6.QtWebEngineWidgets import QWebEngineView
 from .renderer import MarkdownRenderer
 from .exporter import WordExporter, PDFExporter
 from .wysiwyg_editor import EnhancedWYSIWYGEditor
+from .three_column_layout import ThreeColumnLayout, AIAssistantPanel
 
 
 class MainWindow(QMainWindow):
@@ -52,22 +53,23 @@ class MainWindow(QMainWindow):
         # 创建标签页界面
         self.tab_widget = QTabWidget(self)
         
-        # 传统的分割窗格模式
-        traditional_widget = QWidget()
-        traditional_layout = QSplitter(Qt.Orientation.Horizontal)
-        traditional_layout.addWidget(self.editor)
-        traditional_layout.addWidget(self.preview)
-        traditional_layout.setSizes([600, 600])
+        # 1. 三栏布局模式（新的主要模式）
+        self.three_column_layout = ThreeColumnLayout(self)
+        self.ai_assistant = AIAssistantPanel(self)
         
-        # 将splitter作为traditional_widget的布局（需要包装）
-        traditional_wrapper = QWidget()
-        from PyQt6.QtWidgets import QHBoxLayout
-        layout = QHBoxLayout(traditional_wrapper)
-        layout.setContentsMargins(0, 0, 0, 0)
-        layout.addWidget(traditional_layout)
+        # 设置三栏内容
+        self.three_column_layout.set_panel_widget("left", self.editor)
+        self.three_column_layout.set_panel_widget("middle", self.preview)
+        self.three_column_layout.set_panel_widget("right", self.ai_assistant)
+        
+        # 连接布局变化信号
+        self.three_column_layout.layoutChanged.connect(self._on_layout_changed)
+        
+        # 2. WYSIWYG模式（专用编辑器）
+        # 保持现有的WYSIWYG编辑器
         
         # 添加标签页
-        self.tab_widget.addTab(traditional_wrapper, self._get_text('traditional_mode'))
+        self.tab_widget.addTab(self.three_column_layout, self._get_text('three_column_mode'))
         self.tab_widget.addTab(self.wysiwyg_editor, self._get_text('wysiwyg_mode'))
         
         self.setCentralWidget(self.tab_widget)
@@ -107,7 +109,7 @@ class MainWindow(QMainWindow):
                 'export_pdf': '导出 PDF',
                 'export_word': '导出 Word',
                 'toggle_theme': '切换主题',
-                'traditional_mode': '传统模式',
+                'three_column_mode': '三栏编辑',
                 'wysiwyg_mode': 'WYSIWYG 编辑'
             },
             'en': {
@@ -121,7 +123,7 @@ class MainWindow(QMainWindow):
                 'export_pdf': 'Export PDF',
                 'export_word': 'Export Word',
                 'toggle_theme': 'Toggle Theme',
-                'traditional_mode': 'Traditional Mode',
+                'three_column_mode': 'Three Column Editor',
                 'wysiwyg_mode': 'WYSIWYG Editor'
             }
         }
@@ -150,7 +152,7 @@ class MainWindow(QMainWindow):
         self.toggle_theme_action.setText(self._get_text('toggle_theme'))
         
         # Update tab texts
-        self.tab_widget.setTabText(0, self._get_text('traditional_mode'))
+        self.tab_widget.setTabText(0, self._get_text('three_column_mode'))
         self.tab_widget.setTabText(1, self._get_text('wysiwyg_mode'))
         
         # Recreate menu bar with new texts
@@ -276,6 +278,16 @@ class MainWindow(QMainWindow):
             self.wysiwyg_editor.set_markdown(text)
             # 设置暗色模式
             self.wysiwyg_editor.set_dark_mode(self._dark_mode)
+        elif index == 0:  # 切换到三栏模式
+            # 同步内容到三栏模式的编辑器和预览
+            text = self.editor.toPlainText()
+            self.render_preview()
+
+    def _on_layout_changed(self, proportions: list):
+        """三栏布局比例改变时的处理"""
+        # 可以在这里添加布局变化的响应逻辑
+        # 例如：调整字体大小、更新UI元素等
+        self.status.showMessage(f"Layout: {proportions[0]}%-{proportions[1]}%-{proportions[2]}%", 2000)
 
     # File ops
     def new_file(self):
