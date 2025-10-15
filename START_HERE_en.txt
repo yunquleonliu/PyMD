@@ -1,0 +1,63 @@
+﻿========================================
+    PyMD Editor - Markdown Editor
+========================================
+
+🚀 Fastest ways to start (choose one):
+
+  Method 1: Double-click to run
+    → Double-click run_editor.bat
+  
+  Method 2: Drag & Drop (recommended!)
+    → Drag any .md file onto run_editor.bat icon
+    → Or create a desktop shortcut and drag files onto it
+  
+  Method 3: Right-click association
+    → Right-click .md file → Open with → Choose run_editor.bat
+    → Check "Always use this app"
+
+✅ Features:
+  - Live Markdown editing & preview
+  - File open/save
+  - Export to Word (Ctrl+Shift+W)
+  - Export to PDF (Ctrl+Shift+P, needs weasyprint)
+  - Light/Dark theme switching (Ctrl+T)
+
+⌨️ Shortcuts:
+  - Ctrl+N - New
+  - Ctrl+O - Open
+  - Ctrl+S - Save
+  - Ctrl+T - Toggle theme
+  - Ctrl+Shift+W - Export Word
+  - Ctrl+Shift+P - Export PDF
+
+📖 Docs:
+  - FILE_ASSOCIATION_GUIDE_en.md - .md file association guide ⭐
+  - QUICKSTART_en.md - Quick start guide
+  - README_en.md - Full documentation
+  - EXAMPLE.md - Feature demo
+  - DISTRIBUTION_GUIDE_en.md - Distribution guide
+
+🔧 System-wide association (optional):
+  - Run register_md_association.bat as admin
+  - Double-click any .md file to open in PyMD Editor
+
+📦 Distribute to others:
+  - Run create_distribution.bat to create ZIP package
+  - Or upload to GitHub Release
+
+💡 Philosophy:
+  ✅ Simple - zero setup
+  ✅ Worry-free - drag & drop, no install
+  ✅ Open source & free - MIT license
+  💰 Future paid features - only for cloud services
+
+📦 Tech stack:
+  Python 3.13 + PyQt6 + markdown2
+
+📄 License:
+  MIT License (free, commercial use allowed)
+
+========================================
+Dev date: October 15, 2025
+Version: MVP 1.0
+========================================

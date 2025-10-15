@@ -1,0 +1,404 @@
+﻿from __future__ import annotations
+
+import os
+from pathlib import Path
+
+from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtGui import QAction, QCloseEvent
+from PyQt6.QtWidgets import (
+    QFileDialog,
+    QMainWindow,
+    QMessageBox,
+    QSplitter,
+    QStatusBar,
+    QTextEdit,
+    QToolBar,
+    QTabWidget,
+    QWidget,
+)
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+
+from .renderer import MarkdownRenderer
+from .exporter import WordExporter, PDFExporter
+from .wysiwyg_editor import EnhancedWYSIWYGEditor
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("PyMD Editor - MVP")
+        self.resize(1200, 800)
+
+        # State
+        self._current_file: Path | None = None
+        self._dark_mode: bool = False
+        self._dirty: bool = False
+
+        # Core widgets
+        self.editor = QTextEdit(self)
+        self.preview = QWebEngineView(self)
+        self.wysiwyg_editor = EnhancedWYSIWYGEditor(self)
+        self.renderer = MarkdownRenderer()
+        self.word_exporter = WordExporter()
+        self.pdf_exporter = PDFExporter()
+
+        # Live preview debounce timer
+        self._render_timer = QTimer(self)
+        self._render_timer.setSingleShot(True)
+        self._render_timer.setInterval(150)  # ms
+        self._render_timer.timeout.connect(self.render_preview)
+
+        # 创建标签页界面
+        self.tab_widget = QTabWidget(self)
+        
+        # 传统的分割窗格模式
+        traditional_widget = QWidget()
+        traditional_layout = QSplitter(Qt.Orientation.Horizontal)
+        traditional_layout.addWidget(self.editor)
+        traditional_layout.addWidget(self.preview)
+        traditional_layout.setSizes([600, 600])
+        
+        # 将splitter作为traditional_widget的布局（需要包装）
+        traditional_wrapper = QWidget()
+        from PyQt6.QtWidgets import QHBoxLayout
+        layout = QHBoxLayout(traditional_wrapper)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(traditional_layout)
+        
+        # 添加标签页
+        self.tab_widget.addTab(traditional_wrapper, self._get_text('traditional_mode'))
+        self.tab_widget.addTab(self.wysiwyg_editor, self._get_text('wysiwyg_mode'))
+        
+        self.setCentralWidget(self.tab_widget)
+
+        # Status bar
+        self.status = QStatusBar(self)
+        self.setStatusBar(self.status)
+
+        # Connect editor changes
+        self.editor.textChanged.connect(self._on_text_changed)
+        self.wysiwyg_editor.textChanged.connect(self._on_wysiwyg_changed)
+        self.tab_widget.currentChanged.connect(self._on_tab_changed)
+
+        # Language and UI state
+        self._current_language = 'zh'  # Default to Chinese
+        
+        # Actions and toolbars
+        self._init_actions()
+        self._init_toolbar()
+        self._init_menubar()
+
+        # Initial render
+        self.render_preview()
+        
+        # 初始化WYSIWYG编辑器
+        self.wysiwyg_editor.set_markdown("")
+        self.wysiwyg_editor.set_dark_mode(self._dark_mode)
+
+    def _get_text(self, key: str) -> str:
+        """Get localized text"""
+        texts = {
+            'zh': {
+                'file_menu': '文件',
+                'view_menu': '视图', 
+                'language_menu': '语言',
+                'new': '新建',
+                'open': '打开',
+                'save': '保存',
+                'save_as': '另存为',
+                'export_pdf': '导出 PDF',
+                'export_word': '导出 Word',
+                'toggle_theme': '切换主题',
+                'traditional_mode': '传统模式',
+                'wysiwyg_mode': 'WYSIWYG 编辑'
+            },
+            'en': {
+                'file_menu': 'File',
+                'view_menu': 'View',
+                'language_menu': 'Language', 
+                'new': 'New',
+                'open': 'Open',
+                'save': 'Save',
+                'save_as': 'Save As',
+                'export_pdf': 'Export PDF',
+                'export_word': 'Export Word',
+                'toggle_theme': 'Toggle Theme',
+                'traditional_mode': 'Traditional Mode',
+                'wysiwyg_mode': 'WYSIWYG Editor'
+            }
+        }
+        return texts.get(self._current_language, {}).get(key, key)
+
+    def set_language(self, lang: str):
+        """Set interface language"""
+        self._current_language = lang
+        
+        # Update language menu checkboxes
+        self.lang_chinese_action.setChecked(lang == 'zh')
+        self.lang_english_action.setChecked(lang == 'en')
+        
+        # Update UI texts
+        self._update_ui_texts()
+
+    def _update_ui_texts(self):
+        """Update all UI texts according to current language"""
+        # Update action texts
+        self.new_action.setText(self._get_text('new'))
+        self.open_action.setText(self._get_text('open'))
+        self.save_action.setText(self._get_text('save'))
+        self.save_as_action.setText(self._get_text('save_as'))
+        self.export_pdf_action.setText(self._get_text('export_pdf'))
+        self.export_word_action.setText(self._get_text('export_word'))
+        self.toggle_theme_action.setText(self._get_text('toggle_theme'))
+        
+        # Update tab texts
+        self.tab_widget.setTabText(0, self._get_text('traditional_mode'))
+        self.tab_widget.setTabText(1, self._get_text('wysiwyg_mode'))
+        
+        # Recreate menu bar with new texts
+        self.menuBar().clear()
+        self._init_menubar()
+
+    # UI setup
+    def _init_actions(self):
+        self.new_action = QAction("新建", self)
+        self.new_action.setShortcut("Ctrl+N")
+        self.new_action.triggered.connect(self.new_file)
+
+        self.open_action = QAction("打开", self)
+        self.open_action.setShortcut("Ctrl+O")
+        self.open_action.triggered.connect(self.open_file)
+
+        self.save_action = QAction("保存", self)
+        self.save_action.setShortcut("Ctrl+S")
+        self.save_action.triggered.connect(self.save_file)
+
+        self.save_as_action = QAction("另存为", self)
+        self.save_as_action.setShortcut("Ctrl+Shift+S")
+        self.save_as_action.triggered.connect(self.save_file_as)
+
+        self.toggle_theme_action = QAction("切换主题", self)
+        self.toggle_theme_action.setShortcut("Ctrl+T")
+        self.toggle_theme_action.triggered.connect(self.toggle_theme)
+
+        self.export_pdf_action = QAction("导出 PDF", self)
+        self.export_pdf_action.setShortcut("Ctrl+Shift+P")
+        self.export_pdf_action.triggered.connect(self.export_pdf)
+
+        self.export_word_action = QAction("导出 Word", self)
+        self.export_word_action.setShortcut("Ctrl+Shift+W")
+        self.export_word_action.triggered.connect(self.export_word)
+
+        # Language menu actions
+        self.lang_chinese_action = QAction("中文", self)
+        self.lang_chinese_action.setCheckable(True)
+        self.lang_chinese_action.setChecked(True)
+        self.lang_chinese_action.triggered.connect(lambda: self.set_language('zh'))
+
+        self.lang_english_action = QAction("English", self)
+        self.lang_english_action.setCheckable(True)
+        self.lang_english_action.triggered.connect(lambda: self.set_language('en'))
+
+    def _init_toolbar(self):
+        tb = QToolBar("Main", self)
+        tb.addAction(self.new_action)
+        tb.addAction(self.open_action)
+        tb.addAction(self.save_action)
+        tb.addAction(self.save_as_action)
+        tb.addSeparator()
+        tb.addAction(self.export_pdf_action)
+        tb.addAction(self.export_word_action)
+        tb.addSeparator()
+        tb.addAction(self.toggle_theme_action)
+        self.addToolBar(tb)
+
+    def _init_menubar(self):
+        """Initialize menu bar"""
+        menubar = self.menuBar()
+        
+        # File menu
+        file_menu = menubar.addMenu(self._get_text('file_menu'))
+        file_menu.addAction(self.new_action)
+        file_menu.addAction(self.open_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.save_action)
+        file_menu.addAction(self.save_as_action)
+        file_menu.addSeparator()
+        file_menu.addAction(self.export_pdf_action)
+        file_menu.addAction(self.export_word_action)
+        
+        # View menu
+        view_menu = menubar.addMenu(self._get_text('view_menu'))
+        view_menu.addAction(self.toggle_theme_action)
+        
+        # Language menu
+        lang_menu = menubar.addMenu(self._get_text('language_menu'))
+        lang_menu.addAction(self.lang_chinese_action)
+        lang_menu.addAction(self.lang_english_action)
+
+    # Slots
+    def _on_text_changed(self):
+        self._dirty = True
+        text = self.editor.toPlainText()
+        self.status.showMessage(f"字数: {len(text)}", 1500)
+        self._render_timer.start()
+
+    def render_preview(self):
+        text = self.editor.toPlainText()
+        html = self.renderer.to_html(text, dark=self._dark_mode)
+        self.preview.setHtml(html)
+        
+        # 同时更新WYSIWYG编辑器（如果不是当前活动标签页则不更新，避免循环）
+        if self.tab_widget.currentIndex() != 1:  # 不是WYSIWYG标签页
+            self.wysiwyg_editor.set_markdown(text)
+
+    def _on_wysiwyg_changed(self, markdown_text: str):
+        """WYSIWYG编辑器内容改变时的处理"""
+        # 更新传统编辑器内容（避免触发textChanged信号）
+        self.editor.blockSignals(True)
+        self.editor.setPlainText(markdown_text)
+        self.editor.blockSignals(False)
+        
+        # 更新预览
+        html = self.renderer.to_html(markdown_text, dark=self._dark_mode)
+        self.preview.setHtml(html)
+        
+        # 标记为已修改
+        self._dirty = True
+        self._update_title()
+        
+        # 更新状态栏
+        self.status.showMessage(f"字数: {len(markdown_text)}", 1500)
+
+    def _on_tab_changed(self, index: int):
+        """标签页切换时的处理"""
+        if index == 1:  # 切换到WYSIWYG模式
+            # 同步传统编辑器的内容到WYSIWYG编辑器
+            text = self.editor.toPlainText()
+            self.wysiwyg_editor.set_markdown(text)
+            # 设置暗色模式
+            self.wysiwyg_editor.set_dark_mode(self._dark_mode)
+
+    # File ops
+    def new_file(self):
+        if not self._confirm_discard_changes():
+            return
+        self.editor.clear()
+        self.wysiwyg_editor.set_markdown("")
+        self._current_file = None
+        self._dirty = False
+        self._update_title()
+        self.render_preview()
+
+    def open_file(self):
+        if not self._confirm_discard_changes():
+            return
+        path, _ = QFileDialog.getOpenFileName(self, "打开 Markdown 文件", str(Path.home()), "Markdown (*.md)")
+        if not path:
+            return
+        self.load_file(Path(path))
+
+    def load_file(self, file_path: Path):
+        """加载指定的文件（供外部调用，如命令行参数）"""
+        try:
+            with open(file_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                self.editor.setPlainText(content)
+                self.wysiwyg_editor.set_markdown(content)
+            self._current_file = file_path
+            self._dirty = False
+            self._update_title()
+            self.render_preview()
+            self.status.showMessage(f"已打开: {file_path}", 3000)
+        except Exception as e:
+            QMessageBox.critical(self, "打开失败", str(e))
+
+    def save_file(self):
+        if self._current_file is None:
+            return self.save_file_as()
+        try:
+            with open(self._current_file, "w", encoding="utf-8") as f:
+                f.write(self.editor.toPlainText())
+            self._dirty = False
+            self._update_title()
+            self.status.showMessage("已保存", 2000)
+        except Exception as e:
+            QMessageBox.critical(self, "保存失败", str(e))
+
+    def save_file_as(self):
+        path, _ = QFileDialog.getSaveFileName(self, "另存为", str(Path.home() / "untitled.md"), "Markdown (*.md)")
+        if not path:
+            return
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.editor.toPlainText())
+            self._current_file = Path(path)
+            self._dirty = False
+            self._update_title()
+            self.status.showMessage(f"已保存为: {path}", 3000)
+        except Exception as e:
+            QMessageBox.critical(self, "保存失败", str(e))
+
+    def toggle_theme(self):
+        self._dark_mode = not self._dark_mode
+        self.render_preview()
+        # 同时更新WYSIWYG编辑器的主题
+        self.wysiwyg_editor.set_dark_mode(self._dark_mode)
+
+    def export_pdf(self):
+        """Export current document to PDF."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出 PDF", str(Path.home() / "document.pdf"), "PDF Files (*.pdf)"
+        )
+        if not path:
+            return
+        try:
+            text = self.editor.toPlainText()
+            self.pdf_exporter.export(text, Path(path), dark=self._dark_mode)
+            self.status.showMessage(f"已导出 PDF: {path}", 3000)
+            QMessageBox.information(self, "导出成功", f"PDF 已保存到:\n{path}")
+        except ImportError as e:
+            QMessageBox.warning(
+                self,
+                "导出失败",
+                f"PDF 导出需要安装 weasyprint 库:\n\n{str(e)}\n\n"
+                "可运行: pip install weasyprint\n"
+                "注意: Windows 上可能需要安装 GTK3 运行时"
+            )
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出 PDF 时出错:\n{str(e)}")
+
+    def export_word(self):
+        """Export current document to Word."""
+        path, _ = QFileDialog.getSaveFileName(
+            self, "导出 Word", str(Path.home() / "document.docx"), "Word Documents (*.docx)"
+        )
+        if not path:
+            return
+        try:
+            text = self.editor.toPlainText()
+            self.word_exporter.export(text, Path(path))
+            self.status.showMessage(f"已导出 Word: {path}", 3000)
+            QMessageBox.information(self, "导出成功", f"Word 文档已保存到:\n{path}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出 Word 时出错:\n{str(e)}")
+
+    def _update_title(self):
+        name = self._current_file.name if self._current_file else "未命名"
+        star = "*" if self._dirty else ""
+        self.setWindowTitle(f"PyMD Editor - {name}{star}")
+
+    def _confirm_discard_changes(self) -> bool:
+        if not self._dirty:
+            return True
+        resp = QMessageBox.question(self, "放弃更改?", "当前文档有未保存更改，是否放弃？", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        return resp == QMessageBox.StandardButton.Yes
+
+    # Events
+    def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802
+        if self._dirty:
+            ok = self._confirm_discard_changes()
+            if not ok:
+                event.ignore()
+                return
+        event.accept()
