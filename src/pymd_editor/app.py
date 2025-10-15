@@ -47,6 +47,7 @@ class MainWindow(QMainWindow):
         settings = self.preview.settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
         self.wysiwyg_editor = EnhancedWYSIWYGEditor(self)
         self.renderer = MarkdownRenderer()
         self.word_exporter = WordExporter()
@@ -582,7 +583,7 @@ class MainWindow(QMainWindow):
                     if url.isLocalFile():
                         file_path = url.toLocalFile()
                         if self._is_image_file(file_path):
-                            self._insert_dropped_image(file_path, event.pos())
+                            self._insert_dropped_image(file_path)
                             event.acceptProposedAction()
                             return
             original_drop(event)
@@ -596,7 +597,28 @@ class MainWindow(QMainWindow):
         ext = os.path.splitext(file_path)[1].lower()
         return ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg']
         
-    def _insert_dropped_image(self, file_path: str, pos):
+    def _get_optimal_image_path(self, file_path: str) -> str:
+        """获取图片的最佳路径格式"""
+        import os
+        from pathlib import Path
+        
+        # 如果当前有打开的文件，尝试使用相对路径
+        if self._current_file:
+            try:
+                current_dir = self._current_file.parent
+                image_path = Path(file_path)
+                rel_path = os.path.relpath(image_path, current_dir)
+                # 如果相对路径不会跳出太多层级，使用相对路径
+                if not rel_path.startswith('..\\..\\'):
+                    return rel_path.replace('\\', '/')
+            except ValueError:
+                # 不同盘符，无法使用相对路径
+                pass
+        
+        # 否则使用绝对路径
+        return file_path.replace('\\', '/')
+        
+    def _insert_dropped_image(self, file_path: str):
         """插入拖放的图片"""
         import os
         
@@ -608,8 +630,8 @@ class MainWindow(QMainWindow):
         # 创建Markdown语法
         markdown_image = f"![{alt_text}]({display_path})\n"
         
-        # 在拖放位置插入
-        cursor = self.editor.cursorForPosition(pos)
+        # 在当前光标位置插入
+        cursor = self.editor.textCursor()
         cursor.insertText(markdown_image)
         
         # 触发预览更新
