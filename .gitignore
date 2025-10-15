@@ -1,0 +1,56 @@
+﻿# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Distribution / packaging
+build/
+dist/
+dist_old/
+*.egg-info/
+*.egg
+MANIFEST
+wheels/
+pip-wheel-metadata/
+
+# PyInstaller
+*.manifest
+*.spec.backup
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.bak
+*.log
+
+# Distribution packages
+*.zip
+PyMDEditor_Distribution/
+PyMDEditor_Windows_*.zip
+PyMDEditor_v*.zip
+
+# Test files
+test_*.py
+*_test.py
+
+# Documentation artifacts
+PDF_EXPORT_IMPROVEMENTS.md
