@@ -1,15 +1,23 @@
 ﻿@echo off
-REM PyMD Editor 启动脚本
-REM 支持：双击启动 或 拖拽 .md 文件到此脚本图标
+REM PyMD Editor Launch Script
+REM Support: Double-click to start or drag .md files to this script icon
 
-cd /d "%~dp0src"
+REM Set working directory to script location
+cd /d "%~dp0"
 
-REM 如果有参数（拖拽的文件），传递给编辑器
-if "%~1"=="" (
-    "%~dp0.venv\Scripts\python.exe" -m pymd_editor.main
+REM Check for virtual environment, prefer virtual environment if available
+if exist ".venv\Scripts\python.exe" (
+    set PYTHON_CMD=".venv\Scripts\python.exe"
 ) else (
-    "%~dp0.venv\Scripts\python.exe" -m pymd_editor.main "%~1"
+    set PYTHON_CMD=python
 )
 
-REM 如果出错，暂停显示错误信息
+REM Pass file argument if provided (drag and drop support)  
+if "%~1"=="" (
+    %PYTHON_CMD% -m src.pymd_editor.main
+) else (
+    %PYTHON_CMD% -m src.pymd_editor.main "%~1"
+)
+
+REM Pause if error occurs to show error message
 if errorlevel 1 pause

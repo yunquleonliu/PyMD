@@ -33,6 +33,7 @@ class MainWindow(QMainWindow):
         self._current_file: Path | None = None
         self._dark_mode: bool = False
         self._dirty: bool = False
+        self._current_language = 'zh'  # 初始化语言设置
 
         # Core widgets
         self.editor = QTextEdit(self)
@@ -80,9 +81,6 @@ class MainWindow(QMainWindow):
         self.wysiwyg_editor.textChanged.connect(self._on_wysiwyg_changed)
         self.tab_widget.currentChanged.connect(self._on_tab_changed)
 
-        # Language and UI state
-        self._current_language = 'zh'  # Default to Chinese
-        
         # Actions and toolbars
         self._init_actions()
         self._init_toolbar()
