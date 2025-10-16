@@ -17,7 +17,6 @@ class MarkdownRenderer:
             "task_list",
             "code-friendly",
             "toc",
-            "metadata",
         ]
 
     def to_html(self, text: str, dark: bool = False, base_path: str = None) -> str:
@@ -73,14 +72,14 @@ class MarkdownRenderer:
         # If it's an absolute path, convert to file:// URL
         if os.path.isabs(src):
             # Convert to file:// URL for local files
-            return Path(src).as_uri()
+            return Path(src).resolve().as_uri()
         
         # If we have a base path, resolve relative to it
         if base_path:
             base_dir = Path(base_path).parent if os.path.isfile(base_path) else Path(base_path)
             full_path = base_dir / src
             if full_path.exists():
-                return full_path.as_uri()
+                return full_path.resolve().as_uri()
         
         # Return as-is for relative paths or if file doesn't exist
         return src

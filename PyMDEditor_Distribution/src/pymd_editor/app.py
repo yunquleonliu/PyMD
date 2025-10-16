@@ -3,7 +3,7 @@
 import os
 from pathlib import Path
 
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer, Qt, QUrl
 from PyQt6.QtGui import QAction, QCloseEvent
 from PyQt6.QtWidgets import (
     QFileDialog,
@@ -40,8 +40,16 @@ class MainWindow(QMainWindow):
 
         # Core widgets
         self.editor = QTextEdit(self)
+        self._setup_drag_drop()  # 启用拖放功能
         self.preview = QWebEngineView(self)
+        # Enable image loading and mixed content
+        from PyQt6.QtWebEngineCore import QWebEngineSettings
+        settings = self.preview.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
         self.wysiwyg_editor = EnhancedWYSIWYGEditor(self)
+        self.wysiwyg_editor.set_base_path(Path.cwd())
         self.renderer = MarkdownRenderer()
         self.word_exporter = WordExporter()
         self.pdf_exporter = PDFExporter()
@@ -286,8 +294,17 @@ class MainWindow(QMainWindow):
 
     def render_preview(self):
         text = self.editor.toPlainText()
-        html = self.renderer.to_html(text, dark=self._dark_mode)
-        self.preview.setHtml(html)
+        # Pass current file path as base path for image resolution
+        base_path = str(self._current_file) if self._current_file else None
+        html = self.renderer.to_html(text, dark=self._dark_mode, base_path=base_path)
+
+        base_dir = Path(self._current_file).parent if self._current_file else Path.cwd()
+        base_url = QUrl.fromLocalFile(str(base_dir.resolve()))
+        # Ensure the base URL is treated as a directory for relative resources
+        if not base_url.path().endswith('/'):
+            base_url.setPath(base_url.path() + '/')
+
+        self.preview.setHtml(html, base_url)
         
         # 同时更新WYSIWYG编辑器（如果不是当前活动标签页则不更新，避免循环）
         if self.tab_widget.currentIndex() != 1:  # 不是WYSIWYG标签页
@@ -301,8 +318,15 @@ class MainWindow(QMainWindow):
         self.editor.blockSignals(False)
         
         # 更新预览
-        html = self.renderer.to_html(markdown_text, dark=self._dark_mode)
-        self.preview.setHtml(html)
+        base_path = str(self._current_file) if self._current_file else None
+        html = self.renderer.to_html(markdown_text, dark=self._dark_mode, base_path=base_path)
+
+        base_dir = Path(self._current_file).parent if self._current_file else Path.cwd()
+        base_url = QUrl.fromLocalFile(str(base_dir.resolve()))
+        if not base_url.path().endswith('/'):
+            base_url.setPath(base_url.path() + '/')
+
+        self.preview.setHtml(html, base_url)
         
         # 标记为已修改
         self._dirty = True
@@ -316,6 +340,7 @@ class MainWindow(QMainWindow):
         if index == 1:  # 切换到WYSIWYG模式
             # 同步传统编辑器的内容到WYSIWYG编辑器
             text = self.editor.toPlainText()
+            self.wysiwyg_editor.set_base_path(self._current_file, re_render=False)
             self.wysiwyg_editor.set_markdown(text)
             # 设置暗色模式
             self.wysiwyg_editor.set_dark_mode(self._dark_mode)
@@ -335,6 +360,7 @@ class MainWindow(QMainWindow):
         if not self._confirm_discard_changes():
             return
         self.editor.clear()
+        self.wysiwyg_editor.set_base_path(None, re_render=False)
         self.wysiwyg_editor.set_markdown("")
         self._current_file = None
         self._dirty = False
@@ -355,6 +381,7 @@ class MainWindow(QMainWindow):
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
                 self.editor.setPlainText(content)
+                self.wysiwyg_editor.set_base_path(file_path, re_render=False)
                 self.wysiwyg_editor.set_markdown(content)
             self._current_file = file_path
             self._dirty = False
@@ -384,6 +411,7 @@ class MainWindow(QMainWindow):
             with open(path, "w", encoding="utf-8") as f:
                 f.write(self.editor.toPlainText())
             self._current_file = Path(path)
+            self.wysiwyg_editor.set_base_path(self._current_file)
             self._dirty = False
             self._update_title()
             self.status.showMessage(f"已保存为: {path}", 3000)
@@ -486,6 +514,9 @@ class MainWindow(QMainWindow):
         import os
         filename = os.path.basename(file_path)
         
+        # 决定使用相对路径还是绝对路径
+        display_path = self._get_optimal_image_path(file_path)
+        
         # 创建Markdown图片语法
         current_tab = self.tab_widget.currentIndex()
         
@@ -495,9 +526,11 @@ class MainWindow(QMainWindow):
             if cursor.hasSelection():
                 # 如果有选中文本，将其作为alt文本
                 alt_text = cursor.selectedText()
-                markdown_image = f"![{alt_text}]({file_path})"
+                markdown_image = f"![{alt_text}]({display_path})"
             else:
-                markdown_image = f"![{filename}]({file_path})"
+                # 使用文件名作为默认alt文本
+                alt_text = os.path.splitext(filename)[0]  # 去掉扩展名
+                markdown_image = f"![{alt_text}]({display_path})"
             cursor.insertText(markdown_image)
             
         elif current_tab == 1:  # WYSIWYG模式
@@ -509,12 +542,103 @@ class MainWindow(QMainWindow):
                 QMessageBox.information(
                     self, 
                     "图片插入", 
-                    f"图片路径: {file_path}\n请手动复制路径到编辑器"
+                    f"图片路径: {display_path}\n请手动复制路径到编辑器"
                 )
         
         # 触发预览更新
         self._render_timer.start()
         self.status.showMessage(f"已插入图片: {filename}", 3000)
+            
+    def _setup_drag_drop(self):
+        """设置拖放功能"""
+        self.editor.setAcceptDrops(True)
+        
+        # 重写编辑器的拖放事件
+        original_drag_enter = self.editor.dragEnterEvent
+        original_drop = self.editor.dropEvent
+        
+        def drag_enter_event(event):
+            if event.mimeData().hasUrls():
+                # 检查是否包含图片文件
+                for url in event.mimeData().urls():
+                    if url.isLocalFile():
+                        file_path = url.toLocalFile()
+                        if self._is_image_file(file_path):
+                            event.acceptProposedAction()
+                            return
+            original_drag_enter(event)
+            
+        def drop_event(event):
+            if event.mimeData().hasUrls():
+                for url in event.mimeData().urls():
+                    if url.isLocalFile():
+                        file_path = url.toLocalFile()
+                        if self._is_image_file(file_path):
+                            self._insert_dropped_image(file_path)
+                            event.acceptProposedAction()
+                            return
+            original_drop(event)
+            
+        self.editor.dragEnterEvent = drag_enter_event
+        self.editor.dropEvent = drop_event
+        
+    def _is_image_file(self, file_path: str) -> bool:
+        """检查文件是否为图片格式"""
+        import os
+        ext = os.path.splitext(file_path)[1].lower()
+        return ext in ['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.svg']
+        
+    def _get_optimal_image_path(self, file_path: str) -> str:
+        """获取图片的最佳路径格式"""
+        import os
+        from pathlib import Path
+        
+        # 如果当前有打开的文件，尝试使用相对路径
+        if self._current_file:
+            try:
+                current_dir = self._current_file.parent
+                image_path = Path(file_path)
+                rel_path = os.path.relpath(image_path, current_dir)
+                # 如果相对路径不会跳出太多层级，使用相对路径
+                if not rel_path.startswith('..\\..\\') and image_path.exists():
+                    return rel_path.replace('\\', '/')
+            except ValueError:
+                # 不同盘符，无法使用相对路径
+                pass
+
+        # 对于其他情况，直接返回标准 file:// URI，避免后续再转换
+        try:
+            return Path(file_path).resolve(strict=False).as_uri()
+        except ValueError:
+            # 如果路径无法转换为 URI，则退回规范化的 POSIX 格式
+            return Path(file_path).resolve(strict=False).as_posix()
+        
+    def _insert_dropped_image(self, file_path: str):
+        """插入拖放的图片"""
+        import os
+        
+        try:
+            # 获取文件名和最优路径
+            filename = os.path.basename(file_path)
+            alt_text = os.path.splitext(filename)[0]
+            display_path = self._get_optimal_image_path(file_path)
+            
+            # 创建Markdown语法
+            markdown_image = f"![{alt_text}]({display_path})\n"
+            
+            # 在当前光标位置插入
+            cursor = self.editor.textCursor()
+            cursor.insertText(markdown_image)
+            
+            # 触发预览更新
+            self._render_timer.start()
+            self.status.showMessage(f"已插入图片: {filename} (拖放)", 3000)
+            
+            print(f"✅ 拖放成功: {filename}")  # 调试信息
+            
+        except Exception as e:
+            print(f"❌ 拖放错误: {e}")  # 调试信息
+            self.status.showMessage(f"拖放图片失败: {str(e)}", 5000)
 
     # Events
     def closeEvent(self, event: QCloseEvent) -> None:  # noqa: N802

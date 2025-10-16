@@ -1,5 +1,7 @@
 ﻿from __future__ import annotations
 
+from pathlib import Path
+
 from PyQt6.QtCore import QUrl, pyqtSignal, QTimer
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
@@ -21,6 +23,7 @@ class WYSIWYGEditor(QWidget):
         self._markdown_content = ""
         self._dark_mode = False
         self._edit_mode = True  # 始终处于编辑模式
+        self._base_path: Path | None = None
         
         self._setup_ui()
         self._setup_web_view()
@@ -100,10 +103,12 @@ class WYSIWYGEditor(QWidget):
         document.head.appendChild(style);
         
         // 监听内容变化
-        let changeTimer;
+        if (typeof window.changeTimer === 'undefined') {
+            window.changeTimer = null;
+        }
         function notifyChange() {
-            clearTimeout(changeTimer);
-            changeTimer = setTimeout(() => {
+            clearTimeout(window.changeTimer);
+            window.changeTimer = setTimeout(() => {
                 console.log('content_changed');
             }, 300);
         }
@@ -176,10 +181,41 @@ class WYSIWYGEditor(QWidget):
         """获取当前Markdown内容"""
         return self._markdown_content
         
+    def set_base_path(self, base_path: str | Path | None, *, re_render: bool = True):
+        """设置渲染时使用的基础路径，确保图片和资源可以正确解析"""
+        if base_path is None:
+            self._base_path = Path.cwd()
+            if re_render:
+                self._render_content()
+            return
+
+        path = Path(base_path)
+        if path.exists() and path.is_dir():
+            self._base_path = path
+        elif path.suffix:
+            # 认为传入的是文件路径，使用其所在目录
+            self._base_path = path.parent
+        else:
+            self._base_path = path
+
+        if re_render:
+            self._render_content()
+
     def _render_content(self):
         """渲染Markdown内容为HTML"""
-        html = self.renderer.to_html(self._markdown_content, dark=self._dark_mode)
-        self.web_view.setHtml(html)
+        base_dir = self._base_path or Path.cwd()
+        html = self.renderer.to_html(
+            self._markdown_content,
+            dark=self._dark_mode,
+            base_path=str(base_dir)
+        )
+
+        resolved_dir = base_dir.resolve(strict=False)
+        base_url = QUrl.fromLocalFile(str(resolved_dir))
+        if not base_url.path().endswith('/'):
+            base_url.setPath(base_url.path() + '/')
+
+        self.web_view.setHtml(html, base_url)
         
         # 总是启用编辑模式
         def enable_edit():
