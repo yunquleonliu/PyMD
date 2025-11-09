@@ -5,10 +5,11 @@
 
 from PyQt6.QtCore import Qt, pyqtSignal, QSettings, QDateTime
 from PyQt6.QtWidgets import (
-    QWidget, QSplitter, QVBoxLayout, QHBoxLayout, 
+    QWidget, QSplitter, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QFrame, QToolBar, QComboBox,
     QTextEdit, QScrollArea
 )
+from .ai_settings import get_ai_manager, AISettingsDialog, AIProviderConfig
 
 
 class ThreeColumnLayout(QWidget):
@@ -342,31 +343,63 @@ class ThreeColumnLayout(QWidget):
 
 class AIAssistantPanel(QWidget):
     """AI助手面板（右侧面板内容）"""
-    
+
     # 信号
     ai_request = pyqtSignal(str, str, dict)  # task_type, content, context
-    
+
     def __init__(self, parent=None):
         super().__init__(parent)
         self.current_response = ""
+        self.ai_manager = get_ai_manager()
+        self.ai_manager.current_provider_changed.connect(self._on_provider_changed)
         self._setup_ui()
         self._connect_signals()
-        
-    def _setup_ui(self):
+        self._update_ai_display()
         """设置AI助手面板UI"""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
-        
-        # 标题
-        title = QLabel("🤖 AI Assistant")
-        title.setStyleSheet("""
+
+        # AI提供商信息区域
+        provider_layout = QHBoxLayout()
+
+        # AI头像和名称
+        self.ai_avatar_label = QLabel("🤖")
+        self.ai_avatar_label.setStyleSheet("""
+            font-size: 24px;
+            padding: 4px;
+        """)
+        provider_layout.addWidget(self.ai_avatar_label)
+
+        self.ai_name_label = QLabel("AI Assistant")
+        self.ai_name_label.setStyleSheet("""
             font-size: 14px;
             font-weight: bold;
             color: #333;
-            padding: 8px 0;
         """)
-        layout.addWidget(title)
-        
+        provider_layout.addWidget(self.ai_name_label)
+
+        provider_layout.addStretch()
+
+        # 设置按钮
+        self.settings_btn = QPushButton("⚙️")
+        self.settings_btn.setToolTip("AI Settings")
+        self.settings_btn.setMaximumWidth(32)
+        self.settings_btn.clicked.connect(self._open_ai_settings)
+        provider_layout.addWidget(self.settings_btn)
+
+        layout.addLayout(provider_layout)
+
+        # AI个性描述
+        self.ai_personality_label = QLabel("AI assistant ready to help")
+        self.ai_personality_label.setStyleSheet("""
+            color: #666;
+            font-size: 12px;
+            padding: 4px 0;
+            font-style: italic;
+        """)
+        self.ai_personality_label.setWordWrap(True)
+        layout.addWidget(self.ai_personality_label)
+
         # AI状态指示
         self.status_label = QLabel("Ready")
         self.status_label.setStyleSheet("""
@@ -614,3 +647,21 @@ class AIAssistantPanel(QWidget):
             
         if main_window and hasattr(main_window, 'insert_image'):
             main_window.insert_image()
+
+    def _on_provider_changed(self, provider_id: str):
+        """AI提供商改变事件"""
+        self._update_ai_display()
+
+    def _update_ai_display(self):
+        """更新AI显示信息"""
+        current_provider = self.ai_manager.get_current_provider()
+        if current_provider:
+            self.ai_avatar_label.setText(current_provider.avatar_url or "🤖")
+            self.ai_name_label.setText(current_provider.name)
+            self.ai_personality_label.setText(current_provider.personality or "AI assistant ready to help")
+
+    def _open_ai_settings(self):
+        """打开AI设置对话框"""
+        settings_dialog = AISettingsDialog(self)
+        settings_dialog.settings_changed.connect(self._update_ai_display)
+        settings_dialog.exec()

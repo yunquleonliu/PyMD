@@ -24,7 +24,7 @@ from .renderer import MarkdownRenderer
 from .exporter import WordExporter, PDFExporter
 from .wysiwyg_editor import EnhancedWYSIWYGEditor
 from .three_column_layout import ThreeColumnLayout, AIAssistantPanel
-from .ai_framework import AIManager
+from .ai_settings import get_ai_manager
 from .updater import UpdateManager
 
 
@@ -81,7 +81,7 @@ class MainWindow(QMainWindow):
         # 保持现有的WYSIWYG编辑器
 
         # 初始化AI管理器
-        self.ai_manager = AIManager()
+        self.ai_manager = get_ai_manager()
 
         # 更新管理器
         self.update_manager = UpdateManager(manifest_url=UPDATE_MANIFEST_URL)

@@ -414,27 +414,38 @@ class AIWorker(QThread):
 
 
 class AIManager(QObject):
-    """AI服务管理器（主要接口）"""
-    
+    """AI服务管理器（主要接口） - 集成新的提供商管理系统"""
+
     # 信号
     response_received = pyqtSignal(AIResponse)
     status_changed = pyqtSignal(str)
-    
-    def __init__(self):
+
+    def __init__(self, provider_manager=None):
         super().__init__()
+        from .ai_settings import get_ai_manager
+        self.provider_manager = provider_manager or get_ai_manager()
         self.router = AIRouter()
         self.current_worker = None
         self._setup_providers()
-        
+
     def _setup_providers(self):
-        """初始化AI服务提供商"""
-        # Personal AI (免费)
-        personal_ai = PersonalAIProvider()
-        self.router.register_provider(personal_ai, AIProvider.PERSONAL_AI)
-        
-        # Gemini API (需要配置API key)
-        gemini = GeminiProvider()  # API key稍后配置
-        self.router.register_provider(gemini, AIProvider.GEMINI)
+        """初始化AI服务提供商 - 使用新的提供商管理系统"""
+        # 从提供商管理器获取当前启用的提供商
+        enabled_configs = self.provider_manager.get_enabled_providers()
+
+        for config in enabled_configs:
+            if config.provider_type.value == "personal_ai":
+                provider = PersonalAIProvider(
+                    base_url=config.base_url
+                )
+                self.router.register_provider(provider, AIProvider.PERSONAL_AI)
+            elif config.provider_type.value == "gemini":
+                provider = GeminiProvider(
+                    api_key=config.api_key,
+                    model=config.model
+                )
+                self.router.register_provider(provider, AIProvider.GEMINI)
+            # 可以在这里添加更多提供商类型
         
     def configure_gemini(self, api_key: str):
         """配置Gemini API密钥"""
@@ -456,18 +467,40 @@ class AIManager(QObject):
         )
         
         try:
-            # 选择提供商
-            provider_type = self.router.route_request(request)
-            provider = self.router.providers[provider_type]
-            
+            # 使用当前选择的提供商，而不是自动路由
+            current_config = self.provider_manager.get_current_provider()
+            if not current_config:
+                raise ValueError("No AI provider selected")
+
+            # 根据配置创建提供商实例
+            if current_config.provider_type.value == "personal_ai":
+                provider = PersonalAIProvider(base_url=current_config.base_url)
+                provider_type = AIProvider.PERSONAL_AI
+            elif current_config.provider_type.value == "gemini":
+                provider = GeminiProvider(
+                    api_key=current_config.api_key,
+                    model=current_config.model
+                )
+                provider_type = AIProvider.GEMINI
+            else:
+                raise ValueError(f"Unsupported provider type: {current_config.provider_type.value}")
+
+            # 检查提供商是否可用
+            if not provider.is_available():
+                raise ValueError(f"Provider {current_config.name} is not available. Please check configuration.")
+
+            # 检查是否支持任务
+            if not provider.supports_task(request.task_type):
+                raise ValueError(f"Provider {current_config.name} does not support this task type")
+
             # 创建工作线程
             self.current_worker = AIWorker(provider, request)
             self.current_worker.response_ready.connect(self._on_response_ready)
             self.current_worker.error_occurred.connect(self._on_error_occurred)
             self.current_worker.finished.connect(self._on_worker_finished)
-            
+
             # 启动异步请求
-            self.status_changed.emit(f"Requesting {provider.name}...")
+            self.status_changed.emit(f"Requesting {current_config.name}...")
             self.current_worker.start()
             
         except Exception as e:
