@@ -1,4 +1,4 @@
-﻿"""
+"""
 三栏布局组件
 支持左栏编辑器、中栏预览、右栏AI助手的响应式布局
 """
@@ -10,6 +10,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QScrollArea
 )
 from .ai_settings import get_ai_manager, AISettingsDialog, AIProviderConfig
+from .chat_components import ChatHistoryWidget, ChatInputWidget, ChatMessage, MessageType
 
 
 class ThreeColumnLayout(QWidget):
@@ -355,169 +356,226 @@ class AIAssistantPanel(QWidget):
         self._setup_ui()
         self._connect_signals()
         self._update_ai_display()
+
+    def _setup_ui(self):
         """设置AI助手面板UI"""
+        # 设置整体面板样式
+        self.setStyleSheet("""
+            AIAssistantPanel {
+                background-color: #fafafa;
+                border-left: 1px solid #e1e5e9;
+            }
+        """)
+
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(0)
 
-        # AI提供商信息区域
-        provider_layout = QHBoxLayout()
+        # 现代化头部区域
+        self._create_modern_header(layout)
 
-        # AI头像和名称
+        # 优雅的操作按钮区域
+        self._create_action_buttons(layout)
+
+        # 聊天区域
+        self._create_chat_area(layout)
+
+    def _create_modern_header(self, layout):
+        """创建现代化的头部"""
+        header_widget = QWidget()
+        header_widget.setFixedHeight(70)
+        header_widget.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+                    stop:0 #ffffff, stop:1 #f8f9fa);
+                border-bottom: 1px solid #e9ecef;
+            }
+        """)
+
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(16, 12, 16, 12)
+        header_layout.setSpacing(12)
+
+        # AI头像区域 - 更大的、更现代的
+        avatar_container = QWidget()
+        avatar_container.setFixedSize(44, 44)
+        avatar_container.setStyleSheet("""
+            QWidget {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
+                    stop:0 #667eea, stop:1 #764ba2);
+                border-radius: 22px;
+                border: 2px solid #ffffff;
+            }
+        """)
+
+        avatar_layout = QVBoxLayout(avatar_container)
+        avatar_layout.setContentsMargins(0, 0, 0, 0)
+
         self.ai_avatar_label = QLabel("🤖")
         self.ai_avatar_label.setStyleSheet("""
-            font-size: 24px;
-            padding: 4px;
+            QLabel {
+                font-size: 20px;
+                color: white;
+                background: transparent;
+            }
         """)
-        provider_layout.addWidget(self.ai_avatar_label)
+        self.ai_avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        avatar_layout.addWidget(self.ai_avatar_label)
+
+        header_layout.addWidget(avatar_container)
+
+        # 信息区域 - 更清晰的层次
+        info_layout = QVBoxLayout()
+        info_layout.setSpacing(2)
 
         self.ai_name_label = QLabel("AI Assistant")
         self.ai_name_label.setStyleSheet("""
-            font-size: 14px;
-            font-weight: bold;
-            color: #333;
+            QLabel {
+                font-size: 14px;
+                font-weight: 600;
+                color: #1a1a1a;
+                background: transparent;
+            }
         """)
-        provider_layout.addWidget(self.ai_name_label)
+        info_layout.addWidget(self.ai_name_label)
 
-        provider_layout.addStretch()
+        self.status_personality_label = QLabel("Ready to help with your writing")
+        self.status_personality_label.setStyleSheet("""
+            QLabel {
+                color: #6c757d;
+                font-size: 11px;
+                background: transparent;
+            }
+        """)
+        self.status_personality_label.setWordWrap(True)
+        info_layout.addWidget(self.status_personality_label)
 
-        # 设置按钮
+        header_layout.addLayout(info_layout)
+        header_layout.addStretch()
+
+        # 设置按钮 - 更现代的样式
         self.settings_btn = QPushButton("⚙️")
         self.settings_btn.setToolTip("AI Settings")
-        self.settings_btn.setMaximumWidth(32)
-        self.settings_btn.clicked.connect(self._open_ai_settings)
-        provider_layout.addWidget(self.settings_btn)
-
-        layout.addLayout(provider_layout)
-
-        # AI个性描述
-        self.ai_personality_label = QLabel("AI assistant ready to help")
-        self.ai_personality_label.setStyleSheet("""
-            color: #666;
-            font-size: 12px;
-            padding: 4px 0;
-            font-style: italic;
-        """)
-        self.ai_personality_label.setWordWrap(True)
-        layout.addWidget(self.ai_personality_label)
-
-        # AI状态指示
-        self.status_label = QLabel("Ready")
-        self.status_label.setStyleSheet("""
-            color: #666;
-            font-size: 12px;
-            padding: 4px 0;
-        """)
-        layout.addWidget(self.status_label)
-        
-        # 快速操作按钮
-        buttons_layout = QVBoxLayout()
-        buttons_layout.setSpacing(4)
-        
-        # 创建快速操作按钮
-        self.improve_btn = QPushButton("✨ Improve Text")
-        self.improve_btn.setToolTip("Improve selected text")
-        
-        self.summarize_btn = QPushButton("📝 Summarize")
-        self.summarize_btn.setToolTip("Summarize content")
-        
-        self.translate_btn = QPushButton("🌐 Translate")
-        self.translate_btn.setToolTip("Translate text")
-        
-        self.brainstorm_btn = QPushButton("💡 Brainstorm")
-        self.brainstorm_btn.setToolTip("Generate ideas")
-        
-        self.insert_image_btn = QPushButton("🖼️ Insert Image")
-        self.insert_image_btn.setToolTip("Insert image into document")
-        
-        # 按钮样式
-        button_style = """
+        self.settings_btn.setFixedSize(32, 32)
+        self.settings_btn.setStyleSheet("""
             QPushButton {
-                text-align: left;
-                padding: 8px 12px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background-color: white;
-                font-size: 12px;
+                border: none;
+                background-color: transparent;
+                font-size: 16px;
+                border-radius: 6px;
+                color: #6c757d;
             }
             QPushButton:hover {
-                background-color: #f0f0f0;
-                border-color: #007acc;
+                background-color: #e9ecef;
+                color: #495057;
             }
             QPushButton:pressed {
-                background-color: #e0e0e0;
-            }
-        """
-        
-        for btn in [self.improve_btn, self.summarize_btn, self.translate_btn, self.brainstorm_btn, self.insert_image_btn]:
-            btn.setStyleSheet(button_style)
-            buttons_layout.addWidget(btn)
-            
-        layout.addLayout(buttons_layout)
-        
-        # 分隔线
-        separator = QFrame()
-        separator.setFrameShape(QFrame.Shape.HLine)
-        separator.setFrameShadow(QFrame.Shadow.Sunken)
-        layout.addWidget(separator)
-        
-        # AI聊天输入区域
-        chat_layout = QHBoxLayout()
-        self.chat_input = QTextEdit()
-        self.chat_input.setPlaceholderText("Type your message to AI...")
-        self.chat_input.setMaximumHeight(60)
-        self.chat_input.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                background-color: white;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 12px;
-                padding: 8px;
+                background-color: #dee2e6;
             }
         """)
-        
-        self.chat_send_btn = QPushButton("Send")
-        self.chat_send_btn.setMaximumWidth(60)
-        self.chat_send_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #007acc;
+        self.settings_btn.clicked.connect(self._open_ai_settings)
+        header_layout.addWidget(self.settings_btn)
+
+        layout.addWidget(header_widget)
+
+    def _create_action_buttons(self, layout):
+        """创建优雅的操作按钮区域"""
+        buttons_widget = QWidget()
+        buttons_widget.setFixedHeight(50)
+        buttons_widget.setStyleSheet("""
+            QWidget {
+                background-color: #ffffff;
+                border-bottom: 1px solid #e9ecef;
+            }
+        """)
+
+        buttons_layout = QHBoxLayout(buttons_widget)
+        buttons_layout.setContentsMargins(16, 8, 16, 8)
+        buttons_layout.setSpacing(8)
+
+        # 按钮配置
+        button_configs = [
+            ("✨", "Improve", "#28a745"),
+            ("📝", "Summarize", "#007bff"),
+            ("🌐", "Translate", "#6f42c1"),
+            ("💡", "Brainstorm", "#fd7e14"),
+            ("🗑️", "Clear", "#dc3545")
+        ]
+
+        self.action_buttons = []
+
+        for icon, tooltip, color in button_configs:
+            btn = self._create_modern_button(icon, tooltip, color)
+            buttons_layout.addWidget(btn)
+            self.action_buttons.append(btn)
+
+        # 分配按钮引用
+        self.improve_btn, self.summarize_btn, self.translate_btn, self.brainstorm_btn, self.clear_chat_btn = self.action_buttons
+
+        layout.addWidget(buttons_widget)
+
+    def _create_modern_button(self, icon, tooltip, color):
+        """创建现代化的按钮"""
+        btn = QPushButton(icon)
+        btn.setToolTip(tooltip)
+        btn.setFixedSize(36, 36)
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {color};
                 color: white;
                 border: none;
-                border-radius: 4px;
-                padding: 8px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #005fa3;
-            }
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 500;
+            }}
+            QPushButton:hover {{
+                background-color: {self._darken_color(color)};
+            }}
+            QPushButton:pressed {{
+                background-color: {self._darken_color(self._darken_color(color))};
+            }}
         """)
-        
-        chat_layout.addWidget(self.chat_input)
-        chat_layout.addWidget(self.chat_send_btn)
-        layout.addLayout(chat_layout)
-        
-        # AI响应区域
-        self.response_area = QTextEdit()
-        self.response_area.setPlaceholderText("AI responses will appear here...")
-        self.response_area.setStyleSheet("""
-            QTextEdit {
-                border: 1px solid #ddd;
-                border-radius: 4px;
+        return btn
+
+    def _darken_color(self, color):
+        """使颜色变暗用于hover效果"""
+        # 简单的颜色变暗逻辑
+        if color == "#28a745": return "#218838"
+        elif color == "#007bff": return "#0056b3"
+        elif color == "#6f42c1": return "#5a359a"
+        elif color == "#fd7e14": return "#e8680f"
+        elif color == "#dc3545": return "#c82333"
+        return color
+
+    def _create_chat_area(self, layout):
+        """创建聊天区域"""
+        chat_widget = QWidget()
+        chat_widget.setStyleSheet("""
+            QWidget {
                 background-color: #fafafa;
-                font-family: 'Segoe UI', sans-serif;
-                font-size: 12px;
-                padding: 8px;
             }
         """)
-        self.response_area.setMaximumHeight(200)
-        layout.addWidget(self.response_area)
-        
-        # 弹性空间
-        layout.addStretch()
+
+        chat_layout = QVBoxLayout(chat_widget)
+        chat_layout.setContentsMargins(0, 0, 0, 0)
+        chat_layout.setSpacing(0)
+
+        # 聊天历史
+        self.chat_history = ChatHistoryWidget()
+        chat_layout.addWidget(self.chat_history)
+
+        # 聊天输入
+        self.chat_input = ChatInputWidget()
+        self.chat_input.message_sent.connect(self._on_chat_send)
+        chat_layout.addWidget(self.chat_input)
+
+        layout.addWidget(chat_widget)
         
     def set_status(self, status: str):
         """设置状态文本"""
-        self.status_label.setText(status)
+        current_provider = self.ai_manager.get_current_provider()
+        personality = current_provider.personality if current_provider else "AI assistant ready to help"
+        self.status_personality_label.setText(f"{status} • {personality}")
         
     def get_improve_button(self) -> QPushButton:
         return self.improve_btn
@@ -537,11 +595,7 @@ class AIAssistantPanel(QWidget):
         self.summarize_btn.clicked.connect(lambda: self._on_ai_action("summarize"))
         self.translate_btn.clicked.connect(lambda: self._on_ai_action("translate"))
         self.brainstorm_btn.clicked.connect(lambda: self._on_ai_action("brainstorm"))
-        self.insert_image_btn.clicked.connect(self._on_insert_image)
-        
-        # 聊天功能
-        self.chat_send_btn.clicked.connect(self._on_chat_send)
-        self.chat_input.textChanged.connect(self._on_chat_text_changed)
+        self.clear_chat_btn.clicked.connect(self.clear_chat_history)
         
     def _on_ai_action(self, action: str):
         """处理AI操作"""
@@ -586,26 +640,33 @@ class AIAssistantPanel(QWidget):
         except Exception as e:
             return f"Error getting content: {str(e)}"
         
-    def display_response(self, response: str):
-        """显示AI响应"""
-        self.current_response = response
-        self.response_area.setPlainText(response)
-        self.set_status("Response received")
+    def get_clear_chat_button(self) -> QPushButton:
+        return self.clear_chat_btn
         
-    def clear_response(self):
-        """清空响应区域"""
-        self.response_area.clear()
-        self.current_response = ""
-        self.set_status("Ready")
+    def clear_chat_history(self):
+        """清空聊天历史"""
+        self.chat_history.clear_history()
+        self.set_status("Chat history cleared")
         
-    def _on_chat_send(self):
+    def _on_chat_send(self, message: str):
         """发送聊天消息"""
-        message = self.chat_input.toPlainText().strip()
-        if not message:
+        if not message.strip():
             return
             
-        # 显示用户消息
-        self.response_area.append(f"<b>You:</b> {message}")
+        # 创建用户消息
+        user_message = ChatMessage(
+            message_type=MessageType.USER,
+            content=message,
+            metadata={"source": "chat_input"}
+        )
+        
+        # 添加到聊天历史
+        self.chat_history.add_message(user_message, "👤")
+        
+        # 显示打字指示器
+        current_provider = self.ai_manager.get_current_provider()
+        avatar = current_provider.avatar_url if current_provider else "🤖"
+        self.chat_history.show_typing_indicator(avatar)
         
         # 构建上下文
         context = {
@@ -615,12 +676,12 @@ class AIAssistantPanel(QWidget):
             "is_chat": True
         }
         
+        # 保存上下文用于响应处理
+        self._last_context = context
+        
         # 发射AI请求信号
         self.set_status("AI is thinking...")
         self.ai_request.emit("chat", message, context)
-        
-        # 清空输入框
-        self.chat_input.clear()
         
     def _on_chat_text_changed(self):
         """聊天文本变化时启用/禁用发送按钮"""
@@ -631,11 +692,25 @@ class AIAssistantPanel(QWidget):
         """显示AI响应"""
         self.current_response = response
         
-        # 如果是聊天响应，添加AI标签
+        # 隐藏打字指示器
+        self.chat_history.hide_typing_indicator()
+        
+        # 如果是聊天响应，添加到聊天历史
         if hasattr(self, '_last_context') and self._last_context.get('is_chat'):
-            self.response_area.append(f"<b>AI:</b> {response}")
+            ai_message = ChatMessage(
+                message_type=MessageType.AI,
+                content=response,
+                metadata={"provider": self.ai_manager.current_provider_id}
+            )
+            
+            current_provider = self.ai_manager.get_current_provider()
+            avatar = current_provider.avatar_url if current_provider else "🤖"
+            self.chat_history.add_message(ai_message, avatar)
         else:
-            self.response_area.setPlainText(response)
+            # 对于非聊天响应，仍然显示在旧的响应区域（如果存在）
+            if hasattr(self, 'response_area'):
+                self.response_area.setPlainText(response)
+        
         self.set_status("Response received")
         
     def _on_insert_image(self):
@@ -658,7 +733,9 @@ class AIAssistantPanel(QWidget):
         if current_provider:
             self.ai_avatar_label.setText(current_provider.avatar_url or "🤖")
             self.ai_name_label.setText(current_provider.name)
-            self.ai_personality_label.setText(current_provider.personality or "AI assistant ready to help")
+            # 更新状态和个性描述
+            personality = current_provider.personality or "AI assistant ready to help"
+            self.status_personality_label.setText(f"Ready • {personality}")
 
     def _open_ai_settings(self):
         """打开AI设置对话框"""

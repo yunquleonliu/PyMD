@@ -11,7 +11,7 @@ from PyQt6.QtCore import QSettings, QObject, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QGroupBox, QFormLayout, QCheckBox,
-    QMessageBox, QTabWidget, QTextEdit, QSpinBox
+    QMessageBox, QTabWidget, QTextEdit, QSpinBox, QDialog, QDialogButtonBox
 )
 
 
@@ -278,7 +278,7 @@ class AIProviderWidget(QWidget):
         )
 
 
-class AISettingsDialog(QWidget):
+class AISettingsDialog(QDialog):
     """AI设置对话框"""
 
     settings_changed = pyqtSignal()
@@ -315,16 +315,17 @@ class AISettingsDialog(QWidget):
         existing_layout = QVBoxLayout(self.existing_tab)
 
         self.provider_list_combo = QComboBox()
-        self._refresh_provider_list()
+        self.provider_widget = None  # Initialize before refresh
         existing_layout.addWidget(QLabel("选择要编辑的提供商:"))
         existing_layout.addWidget(self.provider_list_combo)
 
-        self.provider_widget = None
         self.provider_list_combo.currentTextChanged.connect(self._on_provider_selected)
 
         existing_layout.addWidget(QLabel("配置:"))
-        self.config_container = QWidget()
+        self.config_container = QWidget()  # Initialize before refresh
         existing_layout.addWidget(self.config_container)
+
+        self._refresh_provider_list()  # Call after UI elements are created
 
         # 保存按钮
         save_btn = QPushButton("保存更改")
@@ -354,14 +355,10 @@ class AISettingsDialog(QWidget):
 
         layout.addWidget(tab_widget)
 
-        # 底部按钮
-        button_layout = QHBoxLayout()
-        close_btn = QPushButton("关闭")
-        close_btn.clicked.connect(self.close)
-        button_layout.addStretch()
-        button_layout.addWidget(close_btn)
-
-        layout.addLayout(button_layout)
+        # 底部按钮 - 使用标准对话框按钮
+        self.button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
+        self.button_box.rejected.connect(self.reject)
+        layout.addWidget(self.button_box)
 
     def _refresh_provider_combo(self):
         """刷新当前提供商下拉框"""
@@ -411,7 +408,8 @@ class AISettingsDialog(QWidget):
 
                 # 添加新的widget
                 self.provider_widget = AIProviderWidget(config)
-                self.config_container.setLayout(QVBoxLayout())
+                if self.config_container.layout() is None:
+                    self.config_container.setLayout(QVBoxLayout())
                 self.config_container.layout().addWidget(self.provider_widget)
 
     def _save_provider_config(self):

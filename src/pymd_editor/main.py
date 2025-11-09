@@ -2,10 +2,13 @@
 import sys
 from pathlib import Path
 
+# 添加src目录到Python路径
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 try:
-    from .app import MainWindow
-except ImportError:  # PyInstaller entry point runs as top-level script
     from pymd_editor.app import MainWindow
+except ImportError:
+    from .app import MainWindow
 
 
 def main():

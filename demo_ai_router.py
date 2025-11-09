@@ -29,9 +29,10 @@ def main():
     print()
 
     # 显示对话框
-    result = settings_dialog.exec()
+    settings_dialog.show()
+    result = app.exec()
 
-    if result:
+    if result == 0:  # Dialog was accepted
         print("设置已保存！")
     else:
         print("设置已取消")

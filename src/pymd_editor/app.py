@@ -81,7 +81,8 @@ class MainWindow(QMainWindow):
         # 保持现有的WYSIWYG编辑器
 
         # 初始化AI管理器
-        self.ai_manager = get_ai_manager()
+        from .ai_framework import AIManager
+        self.ai_manager = AIManager(get_ai_manager())
 
         # 更新管理器
         self.update_manager = UpdateManager(manifest_url=UPDATE_MANIFEST_URL)

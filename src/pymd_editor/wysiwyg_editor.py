@@ -91,7 +91,6 @@ class WYSIWYGEditor(QWidget):
         style.textContent = `
             .content[contenteditable="true"]:focus {
                 border-color: #007acc !important;
-                box-shadow: 0 0 5px rgba(0, 122, 204, 0.3);
             }
             .content[contenteditable="true"] {
                 cursor: text;
