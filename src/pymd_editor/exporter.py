@@ -41,10 +41,31 @@ class WordExporter:
 
 
 class PDFExporter:
-    """Export Markdown to PDF format using HTML intermediate."""
+    """Export Markdown to PDF format using Qt's native printing."""
 
+    def export_via_webengine(self, web_view, output_path: Path) -> None:
+        """
+        Export PDF using QWebEngineView's native print capability.
+        This method should be called with the preview QWebEngineView.
+        """
+        # This will be called from the main window with the preview widget
+        from PyQt6.QtCore import QMarginsF
+        from PyQt6.QtGui import QPageLayout, QPageSize
+        
+        page_layout = QPageLayout(
+            QPageSize(QPageSize.PageSizeId.A4),
+            QPageLayout.Orientation.Portrait,
+            QMarginsF(15, 15, 15, 15)
+        )
+        
+        # Use Qt's native PDF printing - no GTK dependencies
+        web_view.page().printToPdf(str(output_path), page_layout)
+    
     def export(self, markdown_text: str, output_path: Path, dark: bool = False) -> None:
-        """Convert markdown to PDF via HTML."""
+        """
+        Fallback method for direct markdown-to-PDF conversion.
+        Note: This requires weasyprint and GTK dependencies.
+        """
         try:
             from weasyprint import HTML, CSS
             from weasyprint.text.fonts import FontConfiguration
@@ -52,7 +73,7 @@ class PDFExporter:
             raise ImportError(
                 "weasyprint not installed. Install with: pip install weasyprint\n"
                 "Note: On Windows, weasyprint may require GTK3 runtime. "
-                "Alternative: use pdfkit + wkhtmltopdf instead."
+                "Recommended: Use 'Print Preview' export instead (no dependencies)."
             ) from e
         
         # Convert markdown to HTML

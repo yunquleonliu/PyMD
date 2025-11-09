@@ -33,6 +33,21 @@ class MarkdownRenderer:
 <style>
 {css}
 </style>
+<!-- MathJax for LaTeX math rendering -->
+<script>
+window.MathJax = {{
+  tex: {{
+    inlineMath: [['$', '$'], ['\\\\(', '\\\\)']],
+    displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']],
+    processEscapes: true,
+    processEnvironments: true
+  }},
+  options: {{
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+  }}
+}};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
 </head>
 <body>
 <div class=\"content\">{html_body}</div>
@@ -110,6 +125,22 @@ img {
     font-size: 0.9em; 
     margin-top: 5px; 
 }
+/* Page break support for printing/PDF */
+.pagebreak, div[style*="page-break"] { 
+    page-break-after: always; 
+    page-break-inside: avoid;
+    break-after: page;
+    height: 0;
+    margin: 0;
+    padding: 0;
+}
+@media print {
+    .pagebreak, div[style*="page-break"] {
+        page-break-after: always;
+        page-break-inside: avoid;
+        break-after: page;
+    }
+}
 """
 
 DARK_CSS = """
@@ -135,5 +166,21 @@ img {
     color: #94a3b8; 
     font-size: 0.9em; 
     margin-top: 5px; 
+}
+/* Page break support for printing/PDF */
+.pagebreak, div[style*="page-break"] { 
+    page-break-after: always; 
+    page-break-inside: avoid;
+    break-after: page;
+    height: 0;
+    margin: 0;
+    padding: 0;
+}
+@media print {
+    .pagebreak, div[style*="page-break"] {
+        page-break-after: always;
+        page-break-inside: avoid;
+        break-after: page;
+    }
 }
 """

@@ -2,7 +2,10 @@
 import sys
 from pathlib import Path
 
-from .app import MainWindow
+try:
+    from .app import MainWindow
+except ImportError:  # PyInstaller entry point runs as top-level script
+    from pymd_editor.app import MainWindow
 
 
 def main():

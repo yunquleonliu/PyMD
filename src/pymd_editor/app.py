@@ -19,17 +19,19 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 
+from .config import APP_NAME, APP_VERSION, UPDATE_MANIFEST_URL
 from .renderer import MarkdownRenderer
 from .exporter import WordExporter, PDFExporter
 from .wysiwyg_editor import EnhancedWYSIWYGEditor
 from .three_column_layout import ThreeColumnLayout, AIAssistantPanel
 from .ai_framework import AIManager
+from .updater import UpdateManager
 
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PyMD Editor - MVP")
+        self.setWindowTitle(f"{APP_NAME} v{APP_VERSION}")
         self.resize(1200, 800)
 
         # State
@@ -77,33 +79,36 @@ class MainWindow(QMainWindow):
         
         # 2. WYSIWYG模式（专用编辑器）
         # 保持现有的WYSIWYG编辑器
-        
+
         # 初始化AI管理器
         self.ai_manager = AIManager()
-        
+
+        # 更新管理器
+        self.update_manager = UpdateManager(manifest_url=UPDATE_MANIFEST_URL)
+
         # 连接AI信号
         self.ai_assistant.ai_request.connect(self.ai_manager.process_request)
         self.ai_manager.response_received.connect(self._on_ai_response)
         self.ai_manager.status_changed.connect(self._on_ai_status_changed)
-        
+
         # 为WYSIWYG模式创建AI助手容器
         self.wysiwyg_container = QWidget()
         wysiwyg_layout = QHBoxLayout(self.wysiwyg_container)
         wysiwyg_layout.setContentsMargins(0, 0, 0, 0)
-        
+
         # WYSIWYG编辑器占主要部分
         wysiwyg_layout.addWidget(self.wysiwyg_editor, 3)
-        
+
         # 可选的AI助手面板
         self.wysiwyg_ai_assistant = AIAssistantPanel(self)
         self.wysiwyg_ai_assistant.ai_request.connect(self.ai_manager.process_request)
         self.wysiwyg_ai_assistant.hide()  # 默认隐藏
         wysiwyg_layout.addWidget(self.wysiwyg_ai_assistant, 1)
-        
+
         # 添加标签页
         self.tab_widget.addTab(self.three_column_layout, self._get_text('three_column_mode'))
         self.tab_widget.addTab(self.wysiwyg_container, self._get_text('wysiwyg_mode'))
-        
+
         self.setCentralWidget(self.tab_widget)
 
         # Status bar
@@ -138,9 +143,14 @@ class MainWindow(QMainWindow):
                 'open': '打开',
                 'save': '保存',
                 'save_as': '另存为',
+                'print': '打开打印',
                 'export_pdf': '导出 PDF',
                 'export_word': '导出 Word',
                 'toggle_theme': '切换主题',
+                'help_menu': '帮助',
+                'check_updates': '检查更新',
+                'insert_image': '插入图片',
+                'toggle_ai': '显示AI助手',
                 'three_column_mode': '三栏编辑',
                 'wysiwyg_mode': 'WYSIWYG 编辑'
             },
@@ -152,9 +162,14 @@ class MainWindow(QMainWindow):
                 'open': 'Open',
                 'save': 'Save',
                 'save_as': 'Save As',
+                'print': 'Open for Print',
                 'export_pdf': 'Export PDF',
                 'export_word': 'Export Word',
                 'toggle_theme': 'Toggle Theme',
+                'help_menu': 'Help',
+                'check_updates': 'Check for Updates',
+                'insert_image': 'Insert Image',
+                'toggle_ai': 'Toggle AI Assistant',
                 'three_column_mode': 'Three Column Editor',
                 'wysiwyg_mode': 'WYSIWYG Editor'
             }
@@ -179,9 +194,13 @@ class MainWindow(QMainWindow):
         self.open_action.setText(self._get_text('open'))
         self.save_action.setText(self._get_text('save'))
         self.save_as_action.setText(self._get_text('save_as'))
+        self.print_action.setText(self._get_text('print'))
         self.export_pdf_action.setText(self._get_text('export_pdf'))
         self.export_word_action.setText(self._get_text('export_word'))
         self.toggle_theme_action.setText(self._get_text('toggle_theme'))
+        self.insert_image_action.setText(self._get_text('insert_image'))
+        self.toggle_ai_action.setText(self._get_text('toggle_ai'))
+        self.check_updates_action.setText(self._get_text('check_updates'))
         
         # Update tab texts
         self.tab_widget.setTabText(0, self._get_text('three_column_mode'))
@@ -216,6 +235,10 @@ class MainWindow(QMainWindow):
         self.export_pdf_action = QAction("导出 PDF", self)
         self.export_pdf_action.setShortcut("Ctrl+Shift+P")
         self.export_pdf_action.triggered.connect(self.export_pdf)
+        
+        self.print_action = QAction("打印预览", self)
+        self.print_action.setShortcut("Ctrl+P")
+        self.print_action.triggered.connect(self.print_preview)
 
         self.export_word_action = QAction("导出 Word", self)
         self.export_word_action.setShortcut("Ctrl+Shift+W")
@@ -242,6 +265,10 @@ class MainWindow(QMainWindow):
         self.toggle_ai_action.setChecked(False)
         self.toggle_ai_action.triggered.connect(self._toggle_wysiwyg_ai)
 
+        # Update action
+        self.check_updates_action = QAction(self._get_text('check_updates'), self)
+        self.check_updates_action.triggered.connect(self._on_check_updates)
+
     def _init_toolbar(self):
         tb = QToolBar("Main", self)
         tb.addAction(self.new_action)
@@ -251,6 +278,7 @@ class MainWindow(QMainWindow):
         tb.addAction(self.insert_image_action)
         tb.addAction(self.save_as_action)
         tb.addSeparator()
+        tb.addAction(self.print_action)
         tb.addAction(self.export_pdf_action)
         tb.addAction(self.export_word_action)
         tb.addSeparator()
@@ -269,6 +297,7 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.save_action)
         file_menu.addAction(self.save_as_action)
         file_menu.addSeparator()
+        file_menu.addAction(self.print_action)
         file_menu.addAction(self.export_pdf_action)
         file_menu.addAction(self.export_word_action)
         file_menu.addSeparator()
@@ -285,12 +314,19 @@ class MainWindow(QMainWindow):
         lang_menu.addAction(self.lang_chinese_action)
         lang_menu.addAction(self.lang_english_action)
 
+        # Help menu
+        help_menu = menubar.addMenu(self._get_text('help_menu'))
+        help_menu.addAction(self.check_updates_action)
+
     # Slots
     def _on_text_changed(self):
         self._dirty = True
         text = self.editor.toPlainText()
         self.status.showMessage(f"字数: {len(text)}", 1500)
         self._render_timer.start()
+
+    def _on_check_updates(self):
+        self.update_manager.check_for_updates(self)
 
     def render_preview(self):
         text = self.editor.toPlainText()
@@ -425,27 +461,91 @@ class MainWindow(QMainWindow):
         self.wysiwyg_editor.set_dark_mode(self._dark_mode)
 
     def export_pdf(self):
-        """Export current document to PDF."""
+        """Export current document to PDF using rendered preview."""
         path, _ = QFileDialog.getSaveFileName(
             self, "导出 PDF", str(Path.home() / "document.pdf"), "PDF Files (*.pdf)"
         )
         if not path:
             return
+        
         try:
-            text = self.editor.toPlainText()
-            self.pdf_exporter.export(text, Path(path), dark=self._dark_mode)
-            self.status.showMessage(f"已导出 PDF: {path}", 3000)
-            QMessageBox.information(self, "导出成功", f"PDF 已保存到:\n{path}")
-        except ImportError as e:
-            QMessageBox.warning(
-                self,
-                "导出失败",
-                f"PDF 导出需要安装 weasyprint 库:\n\n{str(e)}\n\n"
-                "可运行: pip install weasyprint\n"
-                "注意: Windows 上可能需要安装 GTK3 运行时"
+            from PyQt6.QtCore import QMarginsF, QEventLoop
+            from PyQt6.QtGui import QPageLayout, QPageSize
+            
+            # 使用 Qt 原生 PDF 打印（无需 GTK 依赖）
+            page_layout = QPageLayout(
+                QPageSize(QPageSize.PageSizeId.A4),
+                QPageLayout.Orientation.Portrait,
+                QMarginsF(15, 15, 15, 15)
             )
+            
+            # 创建事件循环等待 PDF 生成完成
+            loop = QEventLoop()
+            
+            def on_pdf_printed(file_path, success):
+                loop.quit()
+                if success:
+                    self.status.showMessage(f"已导出 PDF: {path}", 3000)
+                    QMessageBox.information(self, "导出成功", f"PDF 已保存到:\n{path}")
+                else:
+                    QMessageBox.critical(self, "导出失败", "PDF 生成失败")
+            
+            # 使用预览窗口的渲染结果直接打印
+            self.preview.page().printToPdf(str(path), page_layout)
+            self.preview.page().pdfPrintingFinished.connect(on_pdf_printed)
+            
+            # 等待 PDF 生成完成
+            loop.exec()
+            
         except Exception as e:
             QMessageBox.critical(self, "导出失败", f"导出 PDF 时出错:\n{str(e)}")
+
+    def print_preview(self):
+        """Show print/save dialog for the rendered markdown."""
+        try:
+            from PyQt6.QtCore import QMarginsF, QEventLoop, QUrl
+            from PyQt6.QtGui import QPageLayout, QPageSize, QDesktopServices
+            import tempfile
+            import os
+            
+            # 创建临时 PDF 文件
+            temp_pdf = tempfile.NamedTemporaryFile(suffix='.pdf', delete=False)
+            temp_pdf_path = temp_pdf.name
+            temp_pdf.close()
+            
+            # 设置页面布局
+            page_layout = QPageLayout(
+                QPageSize(QPageSize.PageSizeId.A4),
+                QPageLayout.Orientation.Portrait,
+                QMarginsF(15, 15, 15, 15)
+            )
+            
+            # 使用事件循环等待 PDF 生成
+            loop = QEventLoop()
+            pdf_success = [False]
+            
+            def on_pdf_ready(file_path, success):
+                pdf_success[0] = success
+                loop.quit()
+            
+            # 生成临时 PDF
+            self.preview.page().printToPdf(temp_pdf_path, page_layout)
+            self.preview.page().pdfPrintingFinished.connect(on_pdf_ready)
+            loop.exec()
+            
+            if pdf_success[0]:
+                # 用系统默认 PDF 查看器打开（通常支持打印）
+                QDesktopServices.openUrl(QUrl.fromLocalFile(temp_pdf_path))
+                self.status.showMessage("已在默认 PDF 查看器中打开，您可以从那里打印", 5000)
+            else:
+                QMessageBox.warning(self, "预览失败", "无法生成预览 PDF")
+                if os.path.exists(temp_pdf_path):
+                    os.unlink(temp_pdf_path)
+                    
+        except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            QMessageBox.critical(self, "打印预览失败", f"无法显示打印预览:\n{str(e)}\n\n{error_details}")
 
     def export_word(self):
         """Export current document to Word."""

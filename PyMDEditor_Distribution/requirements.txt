@@ -1,6 +1,0 @@
-﻿PyQt6
-PyQt6-WebEngine
-markdown2
-python-docx
-httpx>=0.25.0
-asyncio
