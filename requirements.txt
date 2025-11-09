@@ -1,6 +1,18 @@
-﻿PyQt6
-PyQt6-WebEngine
-markdown2
-python-docx
+﻿# Core GUI and Web Engine
+PyQt6>=6.6.0
+PyQt6-WebEngine>=6.6.0
+
+# Markdown Processing
+markdown2>=2.4.0
+
+# Document Export
+python-docx>=1.1.0
+
+# AI Integration (optional)
 httpx>=0.25.0
-asyncio
+
+# Optional: PDF export via weasyprint (requires GTK on Windows)
+# weasyprint>=60.0
+
+# Build tool (for creating exe)
+# pyinstaller>=6.0.0

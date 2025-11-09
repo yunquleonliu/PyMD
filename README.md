@@ -1,54 +1,75 @@
 ﻿# PyMD Editor
 
-一个简单的 Windows Markdown 编辑器，支持实时预览和多格式导出。使用 Python + PyQt6 开发。
+A modern Markdown editor with AI assistance, WYSIWYG editing, and powerful export capabilities. Built with Python + PyQt6.
 
-## ✨ 功能特性
+## ✨ Key Features
 
-### 已实现 (MVP)
-- ✅ **实时编辑与预览**: 左侧编辑区 + 右侧实时 HTML 预览
-- ✅ **文件管理**: 新建、打开、保存、另存为 `.md` 文件
-- ✅ **主题切换**: 浅色/深色模式 (Ctrl+T)
-- ✅ **导出 Word**: 导出为 `.docx` 格式 (Ctrl+Shift+W)
-- ✅ **导出 PDF**: 导出为 PDF 格式 (Ctrl+Shift+P，需安装 weasyprint)
-- ✅ **Markdown 扩展**: 支持代码块、表格、任务列表等
+### 🤖 1. AI-Powered Assistance
+- **Integrated AI Assistant**: Get help with writing, formatting, and content improvement
+- **Smart Suggestions**: AI-powered content recommendations while you write
+- **Context-Aware**: Three-column layout with dedicated AI panel
 
-### 即将添加
-- ⏳ 语法高亮编辑器
-- ⏳ 自定义导出样式
-- ⏳ 用户偏好设置持久化
-- ⏳ 插件系统
+### 📝 2. WYSIWYG Editing
+- **Rich Text Editor**: Visual editing mode for users who prefer rich text
+- **Seamless Switching**: Toggle between Markdown source and WYSIWYG modes
+- **Real-time Preview**: Live HTML preview with syntax highlighting
+- **Image Support**: Drag-and-drop images with automatic path handling
 
-## 🚀 快速开始
+### 📄 3. Professional Export
+- **Print Preview** (Ctrl+P): Open rendered Markdown in PDF viewer for printing
+- **PDF Export** (Ctrl+Shift+P): Native Qt-based PDF generation (no external dependencies)
+- **Word Export** (Ctrl+Shift+W): Export to `.docx` format
+- **Math Formulas**: Full LaTeX/MathJax support for equations
+- **Page Breaks**: Support for page breaks in PDF output
 
-### 方法 1: 使用启动脚本 (推荐)
+### Additional Features
+- ✅ **Dark/Light Themes**: Toggle with Ctrl+T
+- ✅ **Multi-language**: Chinese and English interface
+- ✅ **File Association**: Register `.md` files to open with PyMD
+- ✅ **Markdown Extensions**: Code blocks, tables, task lists, strikethrough
 
-双击运行：
+## 🚀 Quick Start
+
+### Option 1: Download Windows Executable (Recommended)
+Download the latest release from [Releases](https://github.com/yunquleonliu/PyMD/releases) and run `PyMDEditor.exe`.
+
+### Option 2: Run from Source
+
+1. **Install Dependencies**:
+```bash
+pip install -r requirements.txt
 ```
-run_editor.bat       (批处理)
-run_editor.ps1       (PowerShell)
+
+2. **Run the Editor**:
+```bash
+python -m pymd_editor.main
 ```
 
-### 方法 2: 命令行启动
+Or use the provided scripts:
+- Windows: `run_editor.bat` or `run_editor.ps1`
+- After installation: `install.bat` then `run_editor.bat`
 
-```powershell
-Set-Location -LiteralPath "C:\Users\Leon Liu\Desktop\微观社会经济\src"
-& "C:\Users\Leon Liu\Desktop\微观社会经济\.venv\Scripts\python.exe" -m pymd_editor.main
+### Option 3: Build Windows Executable
+
+```bash
+# Install PyInstaller
+pip install pyinstaller
+
+# Build distribution
+create_distribution.bat
 ```
 
-## 📦 依赖安装
+The executable will be in `dist\PyMDEditor\PyMDEditor.exe`.
 
-所有依赖已安装在 `.venv` 虚拟环境中：
+## 📦 Dependencies
 
-核心依赖 (已安装):
-- PyQt6 - GUI 框架
-- PyQt6-WebEngine - HTML 预览引擎
-- markdown2 - Markdown 转 HTML
-- python-docx - Word 文档生成
+Core dependencies:
+- **PyQt6** - GUI framework
+- **PyQt6-WebEngine** - HTML preview engine
+- **markdown2** - Markdown to HTML conversion
+- **python-docx** - Word document generation
 
-可选依赖 (PDF 导出):
-```powershell
-& ".venv\Scripts\pip.exe" install weasyprint
-```
+All dependencies are listed in `requirements.txt`.
 
 > **注意**: Windows 上 weasyprint 可能需要 GTK3 运行时。如遇问题，Word 导出功能仍然可用。
 
@@ -56,50 +77,70 @@ Set-Location -LiteralPath "C:\Users\Leon Liu\Desktop\微观社会经济\src"
 
 | 功能 | 快捷键 |
 |------|--------|
-| 新建 | Ctrl+N |
-| 打开 | Ctrl+O |
-| 保存 | Ctrl+S |
-| 另存为 | Ctrl+Shift+S |
-| 导出 PDF | Ctrl+Shift+P |
-| 导出 Word | Ctrl+Shift+W |
-| 切换主题 | Ctrl+T |
+## ⌨️ Keyboard Shortcuts
 
-## 📁 项目结构
+| Action | Shortcut |
+|--------|----------|
+| New File | Ctrl+N |
+| Open File | Ctrl+O |
+| Save | Ctrl+S |
+| Save As | Ctrl+Shift+S |
+| Print Preview | Ctrl+P |
+| Export PDF | Ctrl+Shift+P |
+| Export Word | Ctrl+Shift+W |
+| Insert Image | Ctrl+Shift+I |
+| Toggle Theme | Ctrl+T |
+
+## 📁 Project Structure
 
 ```
-微观社会经济/
-├── .venv/                      # Python 虚拟环境
+PyMD/
 ├── src/
 │   └── pymd_editor/
-│       ├── __init__.py         # 包初始化
-│       ├── main.py             # 启动入口
-│       ├── app.py              # 主窗口和 UI 逻辑
-│       ├── renderer.py         # Markdown → HTML 渲染器
-│       └── exporter.py         # PDF/Word 导出器
-├── requirements.txt            # 依赖列表
-├── run_editor.bat             # Windows 批处理启动脚本
-├── run_editor.ps1             # PowerShell 启动脚本
-└── README.md                  # 本文档
+│       ├── __init__.py              # Package initialization
+│       ├── main.py                  # Entry point
+│       ├── app.py                   # Main window and UI logic
+│       ├── renderer.py              # Markdown → HTML renderer
+│       ├── exporter.py              # PDF/Word exporters
+│       ├── wysiwyg_editor.py        # WYSIWYG editor
+│       ├── ai_framework.py          # AI assistant integration
+│       └── three_column_layout.py   # Three-column UI layout
+├── requirements.txt                 # Python dependencies
+├── PyMDEditor.spec                  # PyInstaller configuration
+├── create_distribution.bat          # Build script
+└── README.md                        # This file
 ```
 
-## 🛠️ 开发说明
+## 🛠️ Development
 
-此项目采用开源模式开发，基于 MIT 许可证：
-- ✅ 免费使用，无需预付费
-- ✅ 源代码公开
-- ✅ 可自由修改和分发
-- 💡 未来如有服务端功能（如云同步），仅收取服务费用
+This project is open source under the MIT License:
+- ✅ Free to use and modify
+- ✅ Source code available
+- ✅ Contributions welcome
 
-### 添加新功能
+### Contributing
 
-项目结构清晰，易于扩展：
-- `renderer.py` - 修改渲染样式或添加 Markdown 扩展
-- `exporter.py` - 添加新的导出格式
-- `app.py` - 添加 UI 功能或工具栏按钮
+Contributions are welcome! The project structure is modular and easy to extend:
+- `renderer.py` - Modify rendering styles or add Markdown extensions
+- `exporter.py` - Add new export formats
+- `app.py` - Add UI features or toolbar buttons
+- `ai_framework.py` - Enhance AI capabilities
 
-### 运行测试
+## 📄 License
 
-```powershell
+MIT License - see [LICENSE](LICENSE) file for details
+
+## 🙏 Acknowledgments
+
+Built with:
+- [PyQt6](https://www.riverbankcomputing.com/software/pyqt/) - GUI framework
+- [markdown2](https://github.com/trentm/python-markdown2) - Markdown parser
+- [MathJax](https://www.mathjax.org/) - Math formula rendering
+- [python-docx](https://python-docx.readthedocs.io/) - Word document generation
+
+---
+
+**Made with ❤️ by yunquleonliu**
 # 安装开发依赖
 & ".venv\Scripts\pip.exe" install pytest
 
