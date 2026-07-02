@@ -25,6 +25,7 @@ STATIC_FILES = [
     "index.html",
     "style.css",
     "app.js",
+    "config.js",
     "manifest.json",
     "sw.js",
     "icon.svg",

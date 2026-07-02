@@ -12,6 +12,11 @@
   <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
   <!-- Turndown: HTML → Markdown (used by WYSIWYG mode) -->
   <script src="https://cdn.jsdelivr.net/npm/turndown@7/dist/turndown.js"></script>
+  <!-- Browser-side PDF and document tooling for static deployments -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
@@ -22,6 +27,7 @@
 
     <button class="btn" id="btn-new"  title="New file (Ctrl+N)">New</button>
     <button class="btn" id="btn-save" title="Save (Ctrl+S)">Save</button>
+    <button class="btn" id="btn-backend" title="Choose backend mode"><span id="backend-choice">Auto</span></button>
     <!-- Phase 3: shown only in standalone/PWA mode (no local server) -->
     <button class="btn hidden" id="btn-open-folder" title="Open a local folder">📂 Open Folder</button>
 
@@ -264,6 +270,39 @@
     </div>
   </div>
 
+  <!-- ── Backend modal ────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="backend-modal" role="dialog" aria-modal="true" aria-labelledby="backend-title">
+    <div class="modal">
+      <h3 id="backend-title">Backend Mode</h3>
+      <label class="backend-option"><input type="radio" name="backend-mode" value="auto"> Auto detect</label>
+      <label class="backend-option"><input type="radio" name="backend-mode" value="demo"> Demo / Lite only</label>
+      <label class="backend-option"><input type="radio" name="backend-mode" value="local"> Localhost backend</label>
+      <label class="backend-option"><input type="radio" name="backend-mode" value="cloud"> <span id="backend-custom-label">Official Cloud</span></label>
+      <label class="backend-option"><input type="radio" name="backend-mode" value="custom"> Custom server</label>
+      <div id="backend-input-wrap" class="hidden">
+        <input
+          type="url"
+          id="backend-input"
+          placeholder="https://your-server.example.com"
+          aria-label="Custom backend URL"
+          autocomplete="off"
+          spellcheck="false"
+        >
+      </div>
+      <div class="modal-actions">
+        <button class="btn" id="backend-cancel">Cancel</button>
+        <button class="btn primary" id="backend-save">Connect</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    if (window.pdfjsLib) {
+      window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+        'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    }
+  </script>
+  <script src="config.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

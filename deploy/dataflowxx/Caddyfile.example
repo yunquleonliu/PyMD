@@ -1,0 +1,16 @@
+dataflowxx.dpdns.org {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8765
+    }
+
+    handle_path /app/* {
+        reverse_proxy 127.0.0.1:8765
+    }
+
+    handle {
+        root * deploy/dataflowxx/site
+        file_server
+    }
+}

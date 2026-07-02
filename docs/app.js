@@ -10,6 +10,94 @@
 
 'use strict';
 
+const APP_BASE_URL = new URL('./', window.location.href);
+const DEFAULT_LOCAL_API = 'http://127.0.0.1:8765';
+const DEFAULT_OFFICIAL_CLOUD = 'https://dataflowxx.dpdns.org';
+const BACKEND_PREF_KEY = 'pymd-backend-preference-v1';
+const RUNTIME_CONFIG = Object.freeze({
+  officialCloudUrl: (window.PYMD_CONFIG?.officialCloudUrl || DEFAULT_OFFICIAL_CLOUD).replace(/\/+$/, ''),
+  demoLabel: window.PYMD_CONFIG?.demoLabel || 'Demo / Lite',
+  cloudLabel: window.PYMD_CONFIG?.cloudLabel || 'Official Cloud',
+  defaultMode: window.PYMD_CONFIG?.defaultMode || 'auto',
+});
+
+const backendPreference = loadBackendPreference();
+let apiBaseUrl = '';
+let backendInfo = null;
+
+function assetUrl(path) {
+  return new URL(path, APP_BASE_URL).toString();
+}
+
+function loadBackendPreference() {
+  const fallback = { mode: RUNTIME_CONFIG.defaultMode, customUrl: '' };
+  try {
+    const raw = localStorage.getItem(BACKEND_PREF_KEY);
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw);
+    return {
+      mode: parsed.mode || fallback.mode,
+      customUrl: (parsed.customUrl || '').trim(),
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+function saveBackendPreference() {
+  localStorage.setItem(BACKEND_PREF_KEY, JSON.stringify(backendPreference));
+}
+
+function getPreferredApiCandidates() {
+  const mode = backendPreference.mode || 'auto';
+  const customUrl = (backendPreference.customUrl || '').trim().replace(/\/+$/, '');
+  const sameOrigin = window.location.origin;
+  const localUrl = DEFAULT_LOCAL_API;
+  const cloudUrl = RUNTIME_CONFIG.officialCloudUrl;
+
+  if (mode === 'local') return [localUrl];
+  if (mode === 'cloud') return [cloudUrl];
+  if (mode === 'custom' && customUrl) return [customUrl];
+  if (mode === 'demo') return [];
+
+  const urls = [];
+  urls.push(sameOrigin);
+  if (sameOrigin !== localUrl) urls.push(localUrl);
+  return urls;
+}
+
+function buildApiUrl(path, baseOverride = apiBaseUrl) {
+  const normalized = path.startsWith('/') ? path : `/${path}`;
+  return new URL(normalized, (baseOverride || window.location.origin).replace(/\/+$/, '') + '/').toString();
+}
+
+async function fetchApi(path, options = {}, baseOverride = apiBaseUrl) {
+  return fetch(buildApiUrl(path, baseOverride), options);
+}
+
+function updateBackendUi() {
+  const badge = document.getElementById('backend-choice');
+  if (!badge) return;
+
+  const mode = backendPreference.mode || 'auto';
+  const labels = {
+    auto: 'Auto',
+    demo: RUNTIME_CONFIG.demoLabel,
+    local: 'Localhost',
+    cloud: RUNTIME_CONFIG.cloudLabel,
+    custom: 'Custom Server',
+  };
+  badge.textContent = labels[mode] || 'Auto';
+}
+
+function getBackendDescription() {
+  if (backendMode === 'api' && backendInfo) {
+    return `${backendInfo.deployment_mode || 'API'} @ ${new URL(apiBaseUrl).host}`;
+  }
+  if (backendMode === 'local') return 'Browser File System';
+  return RUNTIME_CONFIG.demoLabel;
+}
+
 // ── Inline preview CSS used in standalone (no-server) mode ───────────────────
 const PREVIEW_LIGHT_CSS = `
   body{font-family:system-ui,sans-serif;max-width:820px;margin:0 auto;
@@ -52,45 +140,50 @@ window.MathJax={tex:{inlineMath:[['$','$'],['\\\\(','\\\\)']],
 // ── Backend: API (Phase 1 / Phase 2) ─────────────────────────────────────────
 
 class ApiBackend {
+  constructor(baseUrl, info = null) {
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
+    this.info = info;
+  }
+
   async render(markdown, dark, basePath) {
-    const resp = await fetch('/api/render', {
+    const resp = await fetchApi('/api/render', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ markdown, dark, base_path: basePath || undefined }),
-    });
+    }, this.baseUrl);
     if (!resp.ok) throw new Error(`Render HTTP ${resp.status}`);
     const { html } = await resp.json();
     return html;
   }
 
   async listFiles(dir = '') {
-    const resp = await fetch('/api/files?dir=' + encodeURIComponent(dir));
+    const resp = await fetchApi('/api/files?dir=' + encodeURIComponent(dir), {}, this.baseUrl);
     if (!resp.ok) throw new Error(`List files HTTP ${resp.status}`);
     return resp.json();     // { files, dir }
   }
 
   async readFile(path) {
-    const resp = await fetch('/api/file?path=' + encodeURIComponent(path));
+    const resp = await fetchApi('/api/file?path=' + encodeURIComponent(path), {}, this.baseUrl);
     if (!resp.ok) throw new Error(`Read file HTTP ${resp.status}`);
     return resp.json();     // { content, path, name }
   }
 
   async writeFile(path, content) {
-    const resp = await fetch('/api/file', {
+    const resp = await fetchApi('/api/file', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, content }),
-    });
+    }, this.baseUrl);
     if (!resp.ok) throw new Error(`Write file HTTP ${resp.status}`);
     return resp.json();     // { ok, path }
   }
 
   async exportWord(markdown, filename) {
-    const resp = await fetch('/api/export/word', {
+    const resp = await fetchApi('/api/export/word', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ markdown, filename }),
-    });
+    }, this.baseUrl);
     if (!resp.ok) throw new Error(`Export HTTP ${resp.status}`);
     const blob = await resp.blob();
     _triggerDownload(blob, filename);
@@ -115,7 +208,7 @@ class PyodideRenderer {
 
     this._initPromise = new Promise((resolve, reject) => {
       try {
-        this._worker = new Worker('/pyodide_worker.js');
+        this._worker = new Worker(assetUrl('pyodide_worker.js'));
       } catch (e) {
         this._fatal = true;
         reject(e);
@@ -174,6 +267,7 @@ class LocalFsBackend {
   constructor() {
     this.dirHandle = null;          // FileSystemDirectoryHandle
     this._pyodide  = new PyodideRenderer();
+    this._objectUrls = new Map();
 
     // Eagerly start loading Pyodide in the background; failures are silent
     // (render() gracefully falls back to marked.js)
@@ -211,12 +305,15 @@ class LocalFsBackend {
     for await (const [name, entry] of handle.entries()) {
       if (entry.kind === 'directory' && !name.startsWith('.')) {
         files.push({ name, path: dir ? `${dir}/${name}` : name, type: 'dir' });
-      } else if (entry.kind === 'file' && name.toLowerCase().endsWith('.md')) {
+      } else if (entry.kind === 'file') {
+        const lower = name.toLowerCase();
+        if (!lower.endsWith('.md') && !lower.endsWith('.pdf')) continue;
         const file = await entry.getFile();
         files.push({
           name,
           path: dir ? `${dir}/${name}` : name,
           type: 'file',
+          ext: lower.endsWith('.pdf') ? 'pdf' : 'md',
           size: file.size,
           modified: file.lastModified / 1000,
         });
@@ -230,15 +327,10 @@ class LocalFsBackend {
   }
 
   async readFile(path) {
-    const parts = path.split('/');
-    let handle = this.dirHandle;
-    for (const part of parts.slice(0, -1)) {
-      handle = await handle.getDirectoryHandle(part);
-    }
-    const fh = await handle.getFileHandle(parts.at(-1));
+    const fh = await this._resolveFileHandle(path);
     const file = await fh.getFile();
     const content = await file.text();
-    return { content, path, name: parts.at(-1) };
+    return { content, path, name: file.name };
   }
 
   async writeFile(path, content) {
@@ -268,6 +360,29 @@ class LocalFsBackend {
     }
     return handle;
   }
+
+  async _resolveFileHandle(path) {
+    const parts = path.split('/');
+    let handle = this.dirHandle;
+    for (const part of parts.slice(0, -1)) {
+      handle = await handle.getDirectoryHandle(part);
+    }
+    return handle.getFileHandle(parts.at(-1));
+  }
+
+  async getFile(path) {
+    const fh = await this._resolveFileHandle(path);
+    return fh.getFile();
+  }
+
+  async getObjectUrl(path) {
+    const file = await this.getFile(path);
+    const oldUrl = this._objectUrls.get(path);
+    if (oldUrl) URL.revokeObjectURL(oldUrl);
+    const url = URL.createObjectURL(file);
+    this._objectUrls.set(path, url);
+    return url;
+  }
 }
 
 // ── Backend detection ─────────────────────────────────────────────────────────
@@ -276,24 +391,34 @@ let backend = null;
 let backendMode = 'none';
 
 async function detectBackend() {
-  // 1. Try the Python API server (Phase 1 local / Phase 2 Docker)
-  try {
-    const ctrl = new AbortController();
-    const tid  = setTimeout(() => ctrl.abort(), 1500);
-    const resp = await fetch('/api/health', { signal: ctrl.signal });
-    clearTimeout(tid);
-    if (resp.ok) {
-      backend     = new ApiBackend();
-      backendMode = 'api';
-      _updateModeBadge('🖥 Local server');
-      return;
-    }
-  } catch { /* server not running */ }
+  for (const baseUrl of getPreferredApiCandidates()) {
+    try {
+      const ctrl = new AbortController();
+      const tid  = setTimeout(() => ctrl.abort(), 1800);
+      const resp = await fetchApi('/api/health', { signal: ctrl.signal }, baseUrl);
+      clearTimeout(tid);
+      if (resp.ok) {
+        backendInfo = await resp.json();
+        apiBaseUrl = baseUrl.replace(/\/+$/, '');
+        backend = new ApiBackend(apiBaseUrl, backendInfo);
+        backendMode = 'api';
+        const badge = backendInfo.deployment_mode === 'cloud'
+          ? '☁ Cloud backend'
+          : backendInfo.deployment_mode === 'self_hosted'
+            ? '🏢 Private backend'
+            : '🖥 Local server';
+        _updateModeBadge(badge);
+        return;
+      }
+    } catch { /* try next candidate */ }
+  }
 
   // 2. File System Access API (Phase 3 PWA / standalone)
   if (typeof window.showDirectoryPicker === 'function') {
     backend     = new LocalFsBackend();
     backendMode = 'local';
+    apiBaseUrl = '';
+    backendInfo = null;
     _updateModeBadge('📁 File System');
     document.getElementById('btn-open-folder').classList.remove('hidden');
     showStatus('Standalone mode — click 📂 Open Folder to browse files');
@@ -302,6 +427,8 @@ async function detectBackend() {
 
   // 3. No backend — preview-only
   backendMode = 'none';
+  apiBaseUrl = '';
+  backendInfo = null;
   _updateModeBadge('⚠ Preview only');
   showStatus('Run  pymd serve  to enable file operations', true);
 }
@@ -340,6 +467,7 @@ const elSaveasModal = document.getElementById('saveas-modal');
 
 document.addEventListener('DOMContentLoaded', async () => {
   _injectModeBadge();
+  updateBackendUi();
   wireEvents();
   registerServiceWorker();
 
@@ -377,6 +505,19 @@ function wireEvents() {
   document.getElementById('btn-export-word').addEventListener('click', exportWord);
   document.getElementById('btn-print').addEventListener('click', triggerPrint);
   document.getElementById('btn-open-folder').addEventListener('click', openFolder);
+  document.getElementById('btn-backend').addEventListener('click', openBackendModal);
+  document.getElementById('backend-cancel').addEventListener('click', closeBackendModal);
+  document.getElementById('backend-save').addEventListener('click', confirmBackendChoice);
+  document.getElementById('backend-input').addEventListener('keydown', e => {
+    if (e.key === 'Enter') confirmBackendChoice();
+    if (e.key === 'Escape') closeBackendModal();
+  });
+  document.getElementById('backend-modal').addEventListener('click', e => {
+    if (e.target === document.getElementById('backend-modal')) closeBackendModal();
+  });
+  document.querySelectorAll('input[name="backend-mode"]').forEach(el => {
+    el.addEventListener('change', onBackendModeChange);
+  });
 
   document.getElementById('dark-toggle').addEventListener('change', e => {
     state.dark = e.target.checked;
@@ -901,7 +1042,7 @@ async function confirmRename() {
   if (!newName || !ctxTargetPath) return;
 
   try {
-    const resp = await fetch('/api/file/rename', {
+    const resp = await fetchApi('/api/file/rename', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: ctxTargetPath, new_name: newName }),
@@ -926,7 +1067,7 @@ async function deleteFileWithConfirm(path) {
   if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;
 
   try {
-    const resp = await fetch('/api/file?path=' + encodeURIComponent(path), { method: 'DELETE' });
+    const resp = await fetchApi('/api/file?path=' + encodeURIComponent(path), { method: 'DELETE' });
     if (!resp.ok) { const d = await resp.json(); throw new Error(d.detail); }
     if (state.currentPath === path) await newFile();
     showStatus('Deleted: ' + name);
@@ -952,7 +1093,7 @@ async function confirmCreateFolder() {
 
   const folderPath = state.treeDir ? state.treeDir + '/' + name : name;
   try {
-    const resp = await fetch('/api/folder', {
+    const resp = await fetchApi('/api/folder', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: folderPath }),
@@ -971,8 +1112,7 @@ async function showFileInfo(path) {
   try {
     const ext = path.split('.').pop().toLowerCase();
     if (ext === 'pdf') {
-      const r = await fetch('/api/pdf/info?path=' + encodeURIComponent(path));
-      const d = await r.json();
+      const d = await getPdfInfo(path);
       alert(`📄 ${d.name}\nPages: ${d.pages}\nTitle: ${d.title || '—'}\nAuthor: ${d.author || '—'}\nSize: ${(d.size_bytes/1024).toFixed(1)} KB`);
     } else {
       alert(`📝 ${path.split('/').pop()}`);
@@ -1092,8 +1232,14 @@ window.loadFileTree = async function(dir = '') {
   if (!backend || backendMode === 'none') return;
   state.treeDir = dir;
   try {
+    if (backendMode === 'local') {
+      const { files, dir: currentDir } = await backend.listFiles(dir);
+      window.renderFileTree(files, currentDir);
+      return;
+    }
+
     const url  = `/api/files?dir=${encodeURIComponent(dir)}&types=md,pdf`;
-    const resp = await fetch(url);
+    const resp = await fetchApi(url);
     if (!resp.ok) return;
     const { files, dir: currentDir } = await resp.json();
     window.renderFileTree(files, currentDir);
@@ -1120,13 +1266,71 @@ async function updatePdfInfoBar(path) {
   if (!path) { bar.textContent = 'No PDF selected'; return; }
   bar.textContent = 'Loading…';
   try {
-    const resp = await fetch('/api/pdf/info?path=' + encodeURIComponent(path));
-    if (!resp.ok) throw new Error();
-    const d = await resp.json();
+    const d = await getPdfInfo(path);
     bar.textContent = `${d.name}  ·  ${d.pages} pages  ·  ${(d.size_bytes/1024).toFixed(0)} KB  ·  ${d.title || ''}`;
   } catch {
     bar.textContent = path.split('/').pop();
   }
+}
+
+function openBackendModal() {
+  const mode = backendPreference.mode || 'auto';
+  const radio = document.querySelector(`input[name="backend-mode"][value="${mode}"]`)
+    || document.querySelector('input[name="backend-mode"][value="auto"]');
+  if (radio) radio.checked = true;
+
+  const input = document.getElementById('backend-input');
+  input.value = backendPreference.customUrl || '';
+  document.getElementById('backend-custom-label').textContent = `${RUNTIME_CONFIG.cloudLabel}: ${RUNTIME_CONFIG.officialCloudUrl}`;
+  document.getElementById('backend-modal').classList.add('open');
+  onBackendModeChange();
+  setTimeout(() => {
+    if ((radio?.value || '') === 'custom') input.focus();
+  }, 50);
+}
+
+function closeBackendModal() {
+  document.getElementById('backend-modal').classList.remove('open');
+}
+
+function onBackendModeChange() {
+  const selected = document.querySelector('input[name="backend-mode"]:checked')?.value || 'auto';
+  const wrapper = document.getElementById('backend-input-wrap');
+  wrapper.classList.toggle('hidden', selected !== 'custom');
+}
+
+async function confirmBackendChoice() {
+  const selected = document.querySelector('input[name="backend-mode"]:checked')?.value || 'auto';
+  const customUrl = document.getElementById('backend-input').value.trim();
+  if (selected === 'custom' && !customUrl) {
+    showStatus('Enter a custom backend URL', true);
+    return;
+  }
+
+  backendPreference.mode = selected;
+  backendPreference.customUrl = customUrl.replace(/\/+$/, '');
+  saveBackendPreference();
+  updateBackendUi();
+  closeBackendModal();
+  showStatus('Reconnecting…');
+  await reinitializeBackend();
+}
+
+async function reinitializeBackend() {
+  backend = null;
+  backendMode = 'none';
+  apiBaseUrl = '';
+  backendInfo = null;
+  document.getElementById('btn-open-folder').classList.add('hidden');
+  document.getElementById('file-tree').innerHTML = '';
+  await detectBackend();
+  if (backendMode === 'api') {
+    await loadFileTree('');
+    showStatus(`Connected: ${getBackendDescription()}`);
+  } else if (backendMode === 'local') {
+    showStatus('Standalone mode ready — choose a folder');
+  }
+  await renderPreview();
 }
 
 function syncPdfPathDisplays(path) {
@@ -1216,12 +1420,20 @@ async function pdfExtract() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
   const pages = document.getElementById('pdf-extract-pages').value.trim();
   if (!pages) { showStatus('Enter page range (e.g. 1-3, 5)', true); return; }
+  if (backendMode === 'local') {
+    await localPdfExtract(pdfActivePath, pages);
+    return;
+  }
   await _pdfApiDownload('/api/pdf/extract', { path: pdfActivePath, pages });
 }
 
 async function pdfMerge() {
   if (mergePaths.length < 2) { showStatus('Add at least 2 PDFs to merge', true); return; }
   const filename = document.getElementById('pdf-merge-filename').value.trim() || 'merged.pdf';
+  if (backendMode === 'local') {
+    await localPdfMerge([...mergePaths], filename);
+    return;
+  }
   await _pdfApiDownload('/api/pdf/merge', { paths: [...mergePaths], filename });
 }
 
@@ -1233,6 +1445,10 @@ async function pdfInsert() {
     showStatus('Pick a different PDF as insert source', true); return;
   }
   const after = parseInt(document.getElementById('pdf-insert-after').value) || 0;
+  if (backendMode === 'local') {
+    await localPdfInsert(pdfActivePath, src, after);
+    return;
+  }
   await _pdfApiDownload('/api/pdf/insert', {
     base: pdfActivePath, insert: src, after_page: after,
   });
@@ -1240,18 +1456,26 @@ async function pdfInsert() {
 
 async function pdfToWord() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
+  if (backendMode === 'local') {
+    await localPdfToWord(pdfActivePath);
+    return;
+  }
   await _pdfApiDownload('/api/pdf/to-word', { path: pdfActivePath });
 }
 
 async function pdfToExcel() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
+  if (backendMode === 'local') {
+    await localPdfToExcel(pdfActivePath);
+    return;
+  }
   await _pdfApiDownload('/api/pdf/to-excel', { path: pdfActivePath });
 }
 
 async function _pdfApiDownload(endpoint, body) {
   showStatus('Processing…');
   try {
-    const resp = await fetch(endpoint, {
+    const resp = await fetchApi(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -1268,6 +1492,241 @@ async function _pdfApiDownload(endpoint, body) {
     showStatus('Error: ' + err.message, true);
     console.error(err);
   }
+}
+
+async function getPdfInfo(path) {
+  if (backendMode === 'api') {
+    const resp = await fetchApi('/api/pdf/info?path=' + encodeURIComponent(path));
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    return resp.json();
+  }
+
+  const pdf = await _loadLocalPdf(path);
+  try {
+    let title = '';
+    let author = '';
+    try {
+      const meta = await pdf.getMetadata();
+      title = meta?.info?.Title || '';
+      author = meta?.info?.Author || '';
+    } catch { /* ignore */ }
+
+    const file = await backend.getFile(path);
+    return {
+      name: file.name,
+      pages: pdf.numPages,
+      title,
+      author,
+      size_bytes: file.size,
+    };
+  } finally {
+    await pdf.destroy();
+  }
+}
+
+async function _loadLocalPdf(path) {
+  if (typeof pdfjsLib === 'undefined') {
+    throw new Error('PDF runtime not loaded');
+  }
+  const file = await backend.getFile(path);
+  const data = await file.arrayBuffer();
+  return pdfjsLib.getDocument({ data }).promise;
+}
+
+function _parsePageSpec(spec, totalPages) {
+  const pages = new Set();
+  for (const chunk of spec.split(',')) {
+    const part = chunk.trim();
+    if (!part) continue;
+    const range = part.split('-').map(x => parseInt(x.trim(), 10));
+    if (range.some(Number.isNaN)) throw new Error('Invalid page range');
+    const start = Math.max(1, range[0]);
+    const end = Math.min(totalPages, range[1] ?? range[0]);
+    for (let page = Math.min(start, end); page <= Math.max(start, end); page++) {
+      pages.add(page);
+    }
+  }
+  return [...pages].sort((a, b) => a - b);
+}
+
+async function localPdfExtract(path, spec) {
+  if (typeof PDFLib === 'undefined') {
+    showStatus('PDF runtime not loaded', true);
+    return;
+  }
+
+  showStatus('Extracting pages…');
+  try {
+    const srcFile = await backend.getFile(path);
+    const srcBytes = await srcFile.arrayBuffer();
+    const srcPdf = await PDFLib.PDFDocument.load(srcBytes);
+    const pageNumbers = _parsePageSpec(spec, srcPdf.getPageCount());
+    if (!pageNumbers.length) throw new Error('No pages selected');
+
+    const outPdf = await PDFLib.PDFDocument.create();
+    const copied = await outPdf.copyPages(srcPdf, pageNumbers.map(p => p - 1));
+    copied.forEach(page => outPdf.addPage(page));
+
+    const outBytes = await outPdf.save();
+    _triggerDownload(new Blob([outBytes], { type: 'application/pdf' }), srcFile.name.replace(/\.pdf$/i, '_extract.pdf'));
+    showStatus('Downloaded extracted PDF');
+  } catch (err) {
+    showStatus('Error: ' + err.message, true);
+  }
+}
+
+async function localPdfMerge(paths, filename) {
+  if (typeof PDFLib === 'undefined') {
+    showStatus('PDF runtime not loaded', true);
+    return;
+  }
+
+  showStatus('Merging PDFs…');
+  try {
+    const merged = await PDFLib.PDFDocument.create();
+    for (const path of paths) {
+      const file = await backend.getFile(path);
+      const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer());
+      const copied = await merged.copyPages(pdf, pdf.getPageIndices());
+      copied.forEach(page => merged.addPage(page));
+    }
+    const outBytes = await merged.save();
+    _triggerDownload(new Blob([outBytes], { type: 'application/pdf' }), filename);
+    showStatus('Downloaded: ' + filename);
+  } catch (err) {
+    showStatus('Error: ' + err.message, true);
+  }
+}
+
+async function localPdfInsert(basePath, insertPath, afterPage) {
+  if (typeof PDFLib === 'undefined') {
+    showStatus('PDF runtime not loaded', true);
+    return;
+  }
+
+  showStatus('Inserting PDF…');
+  try {
+    const baseFile = await backend.getFile(basePath);
+    const insertFile = await backend.getFile(insertPath);
+    const basePdf = await PDFLib.PDFDocument.load(await baseFile.arrayBuffer());
+    const insertPdf = await PDFLib.PDFDocument.load(await insertFile.arrayBuffer());
+    const outPdf = await PDFLib.PDFDocument.create();
+
+    const basePages = await outPdf.copyPages(basePdf, basePdf.getPageIndices());
+    const insertPages = await outPdf.copyPages(insertPdf, insertPdf.getPageIndices());
+    const splitIndex = Math.min(Math.max(afterPage, 0), basePages.length);
+
+    basePages.slice(0, splitIndex).forEach(page => outPdf.addPage(page));
+    insertPages.forEach(page => outPdf.addPage(page));
+    basePages.slice(splitIndex).forEach(page => outPdf.addPage(page));
+
+    const outBytes = await outPdf.save();
+    const filename = baseFile.name.replace(/\.pdf$/i, '_inserted.pdf');
+    _triggerDownload(new Blob([outBytes], { type: 'application/pdf' }), filename);
+    showStatus('Downloaded: ' + filename);
+  } catch (err) {
+    showStatus('Error: ' + err.message, true);
+  }
+}
+
+async function localPdfToWord(path) {
+  if (typeof docx === 'undefined') {
+    showStatus('Word runtime not loaded', true);
+    return;
+  }
+
+  showStatus('Converting PDF to Word…');
+  try {
+    const pages = await _extractPdfTextPages(path);
+    const file = await backend.getFile(path);
+    const children = [];
+
+    pages.forEach((pageText, index) => {
+      children.push(new docx.Paragraph({
+        text: `Page ${index + 1}`,
+        heading: docx.HeadingLevel.HEADING_1,
+      }));
+      const lines = pageText.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+      if (!lines.length) {
+        children.push(new docx.Paragraph(''));
+      } else {
+        lines.forEach(line => children.push(new docx.Paragraph(line)));
+      }
+    });
+
+    const document = new docx.Document({
+      sections: [{ children }],
+    });
+    const blob = await docx.Packer.toBlob(document);
+    _triggerDownload(blob, file.name.replace(/\.pdf$/i, '.docx'));
+    showStatus('Downloaded Word file');
+  } catch (err) {
+    showStatus('Error: ' + err.message, true);
+  }
+}
+
+async function localPdfToExcel(path) {
+  if (typeof XLSX === 'undefined') {
+    showStatus('Excel runtime not loaded', true);
+    return;
+  }
+
+  showStatus('Converting PDF to Excel…');
+  try {
+    const pages = await _extractPdfTextPages(path);
+    const file = await backend.getFile(path);
+    const wb = XLSX.utils.book_new();
+
+    pages.forEach((pageText, index) => {
+      const rows = pageText
+        .split(/\r?\n/)
+        .map(line => line.trim())
+        .filter(Boolean)
+        .map(line => [line]);
+      const ws = XLSX.utils.aoa_to_sheet(rows.length ? rows : [['']]);
+      XLSX.utils.book_append_sheet(wb, ws, `Page ${index + 1}`.slice(0, 31));
+    });
+
+    const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+    _triggerDownload(
+      new Blob([out], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+      file.name.replace(/\.pdf$/i, '.xlsx')
+    );
+    showStatus('Downloaded Excel file');
+  } catch (err) {
+    showStatus('Error: ' + err.message, true);
+  }
+}
+
+async function _extractPdfTextPages(path) {
+  const pdf = await _loadLocalPdf(path);
+  try {
+    const pages = [];
+    for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+      const page = await pdf.getPage(pageNum);
+      const text = await page.getTextContent();
+      pages.push(_joinPdfTextItems(text.items || []));
+    }
+    return pages;
+  } finally {
+    await pdf.destroy();
+  }
+}
+
+function _joinPdfTextItems(items) {
+  const rows = [];
+  for (const item of items) {
+    const value = (item.str || '').trim();
+    if (!value) continue;
+    const y = Math.round((item.transform?.[5] || 0) / 4) * 4;
+    const last = rows[rows.length - 1];
+    if (!last || Math.abs(last.y - y) > 3) {
+      rows.push({ y, text: value });
+    } else {
+      last.text += (last.text.endsWith(' ') ? '' : ' ') + value;
+    }
+  }
+  return rows.map(row => row.text).join('\n');
 }
 
 
@@ -1309,8 +1768,17 @@ function _openPdfViewer(path) {
   paneTitle.textContent = '📑 ' + name;
 
   // Point iframe at the stream endpoint
-  pdfIframe.src = '/api/pdf/stream?path=' + encodeURIComponent(path);
+  if (backendMode === 'local') {
+    backend.getObjectUrl(path)
+      .then(url => {
+        pdfIframe.src = url;
+        showStatus('PDF: ' + name);
+      })
+      .catch(err => showStatus('Error: ' + err.message, true));
+    return;
+  }
 
+  pdfIframe.src = buildApiUrl('/api/pdf/stream?path=' + encodeURIComponent(path));
   showStatus('PDF: ' + name);
 }
 
@@ -1331,8 +1799,17 @@ document.addEventListener('DOMContentLoaded', () => {
   // PDF viewer toolbar buttons
   document.getElementById('pdf-viewer-download')?.addEventListener('click', () => {
     if (pdfActivePath) {
+      if (backendMode === 'local') {
+        backend.getObjectUrl(pdfActivePath).then(url => {
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = pdfActivePath.split(/[/\\]/).pop();
+          a.click();
+        });
+        return;
+      }
       const a = document.createElement('a');
-      a.href     = '/api/pdf/stream?path=' + encodeURIComponent(pdfActivePath);
+      a.href     = buildApiUrl('/api/pdf/stream?path=' + encodeURIComponent(pdfActivePath));
       a.download = pdfActivePath.split(/[/\\]/).pop();
       a.click();
     }

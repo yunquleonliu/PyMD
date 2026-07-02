@@ -353,7 +353,8 @@ html, body {
   color: var(--fg);
 }
 
-.modal input[type="text"] {
+.modal input[type="text"],
+.modal input[type="url"] {
   display: block;
   width: 100%;
   padding: 8px 10px;
@@ -368,7 +369,20 @@ html, body {
   transition: var(--trans);
 }
 
-.modal input[type="text"]:focus { border-color: var(--accent); }
+.modal input[type="text"]:focus,
+.modal input[type="url"]:focus { border-color: var(--accent); }
+
+.backend-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px;
+  color: var(--fg);
+}
+
+#backend-input-wrap {
+  margin-top: 8px;
+}
 
 .modal-actions {
   display: flex;

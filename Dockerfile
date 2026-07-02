@@ -11,6 +11,9 @@ RUN pip install --no-cache-dir \
     "markdown2>=2.4.0" \
     "python-docx>=1.1.0" \
     "httpx>=0.25.0" \
+    "pdf2docx>=0.5.6" \
+    "openpyxl>=3.1" \
+    "pymupdf>=1.22.5" \
     "python-dateutil>=2.8.2"
 
 # ── Runtime stage ─────────────────────────────────────────────────────────────
@@ -27,6 +30,7 @@ COPY src/ ./src/
 
 # Make pymd_editor importable
 ENV PYTHONPATH=/app/src
+ENV PYMD_DEPLOYMENT_MODE=cloud
 
 EXPOSE 8765
 

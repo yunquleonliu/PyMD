@@ -1,0 +1,15 @@
+services:
+  pymd:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: pymd/editor-cloud
+    ports:
+      - "8765:8765"
+    environment:
+      PYMD_DEPLOYMENT_MODE: cloud
+      PYMD_PUBLIC_BASE_URL: https://dataflowxx.dpdns.org
+      PYMD_CORS_ALLOW_ORIGINS: https://dataflowxx.dpdns.org,https://yunquleonliu.github.io
+    volumes:
+      - ./data:/data
+    restart: unless-stopped

@@ -13,6 +13,7 @@ const SHELL_ASSETS = [
   BASE + 'index.html',
   BASE + 'style.css',
   BASE + 'app.js',
+  BASE + 'config.js',
   BASE + 'manifest.json',
   BASE + 'icon.svg',
   BASE + 'pyodide_worker.js',

@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PyMD official cloud workspace and document conversion service">
+  <title>PyMD Cloud</title>
+  <link rel="stylesheet" href="site.css">
+</head>
+<body>
+  <main class="shell">
+    <section class="hero">
+      <p class="eyebrow">PyMD Official Cloud</p>
+      <h1>One document workspace, three deployment modes, one quality target.</h1>
+      <p class="lede">
+        PyMD Cloud is the official entry for high-fidelity document conversion,
+        shared web editing, and the backend contract reused by local and customer-hosted deployments.
+      </p>
+      <div class="actions">
+        <a class="btn primary" href="/app/">Open App</a>
+        <a class="btn" href="https://yunquleonliu.github.io/PyMD/">Open Demo</a>
+      </div>
+    </section>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Official Cloud</h2>
+        <p>
+          The recommended production mode. Use this when you want the full backend:
+          PDF to Word, PDF to Excel, file browsing, and consistent conversion quality.
+        </p>
+      </article>
+      <article class="card">
+        <h2>Local Full Stack</h2>
+        <p>
+          Run the same frontend and backend on your own machine through `pymd serve`
+          or Docker for private local work.
+        </p>
+      </article>
+      <article class="card">
+        <h2>Customer Self-Hosted</h2>
+        <p>
+          Reuse the same backend contract on a customer server while keeping the UI behavior aligned.
+        </p>
+      </article>
+    </section>
+
+    <section class="info">
+      <div class="info-card">
+        <h3>Service Endpoints</h3>
+        <ul>
+          <li><code>/</code> official homepage</li>
+          <li><code>/app/</code> PyMD application</li>
+          <li><code>/api/health</code> deployment and feature probe</li>
+        </ul>
+      </div>
+      <div class="info-card">
+        <h3>Demo Role</h3>
+        <p>
+          GitHub Pages stays as the public demo, docs, and lightweight fallback.
+          It is not the source of truth for backend conversion quality.
+        </p>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

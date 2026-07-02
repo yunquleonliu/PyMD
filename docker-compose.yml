@@ -9,4 +9,6 @@ services:
       # Override DOCS_DIR in your shell or a .env file, e.g.:
       #   DOCS_DIR=~/Documents docker compose up
       - "${DOCS_DIR:-./data}:/data"
+    environment:
+      PYMD_DEPLOYMENT_MODE: local
     restart: unless-stopped

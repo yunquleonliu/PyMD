@@ -6,6 +6,7 @@ against BASE_DIR to prevent path traversal.
 """
 from __future__ import annotations
 
+import os
 import tempfile
 from pathlib import Path
 from typing import Optional
@@ -33,15 +34,23 @@ from pymd_editor.config import APP_VERSION
 
 app = FastAPI(title="PyMD Editor", version=APP_VERSION, docs_url="/api/docs")
 
-# CORS: only allow same-origin requests from the embedded frontend.
-# When hosted on the internet (Phase 3) this list can be extended.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
+def _cors_origins() -> list[str]:
+    defaults = [
         "http://localhost:8765",
         "http://127.0.0.1:8765",
-    ],
-    allow_methods=["GET", "POST", "DELETE"],
+    ]
+    extra = [
+        origin.strip()
+        for origin in os.getenv("PYMD_CORS_ALLOW_ORIGINS", "").split(",")
+        if origin.strip()
+    ]
+    return defaults + extra
+
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=_cors_origins(),
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["*"],
 )
 
@@ -50,6 +59,22 @@ _word_exporter = WordExporter()
 
 # Base directory for ALL file operations — overridden by serve.py at startup
 BASE_DIR: Path = Path.home()
+DEPLOYMENT_MODE = os.getenv("PYMD_DEPLOYMENT_MODE", "local")
+PUBLIC_BASE_URL = os.getenv("PYMD_PUBLIC_BASE_URL", "").strip()
+
+
+def _feature_flags() -> dict[str, bool]:
+    return {
+        "markdown_render": True,
+        "markdown_export_word": True,
+        "folder_browse": True,
+        "pdf_info": True,
+        "pdf_extract": True,
+        "pdf_merge": True,
+        "pdf_insert": True,
+        "pdf_to_word": True,
+        "pdf_to_excel": True,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -109,6 +134,9 @@ def health():
         "status": "ok",
         "version": APP_VERSION,
         "base_dir": str(BASE_DIR),
+        "deployment_mode": DEPLOYMENT_MODE,
+        "public_base_url": PUBLIC_BASE_URL,
+        "features": _feature_flags(),
     }
 
 
