@@ -7,7 +7,7 @@ import asyncio
 import json
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Callable
 from enum import Enum
 
 import httpx
@@ -18,6 +18,7 @@ class AIProvider(Enum):
     """AI服务提供商枚举"""
     PERSONAL_AI = "personal_ai"
     GEMINI = "gemini"
+    AURAPAI = "aurapai"
 
 
 class TaskType(Enum):
@@ -68,7 +69,7 @@ class BaseAIProvider(ABC):
         self.capabilities = []
         
     @abstractmethod
-    async def generate(self, request: AIRequest) -> AIResponse:
+    async def generate(self, request: AIRequest, progress_callback: Optional[Callable[[str], None]] = None) -> AIResponse:
         """生成AI响应"""
         pass
     
@@ -105,7 +106,7 @@ class PersonalAIProvider(BaseAIProvider):
             TaskType.GENERATE_CONTENT
         ]
         
-    async def generate(self, request: AIRequest) -> AIResponse:
+    async def generate(self, request: AIRequest, progress_callback: Optional[Callable[[str], None]] = None) -> AIResponse:
         """调用Personal AI服务"""
         start_time = asyncio.get_event_loop().time()
         
@@ -214,7 +215,7 @@ class GeminiProvider(BaseAIProvider):
             TaskType.GENERATE_CONTENT
         ]
         
-    async def generate(self, request: AIRequest) -> AIResponse:
+    async def generate(self, request: AIRequest, progress_callback: Optional[Callable[[str], None]] = None) -> AIResponse:
         """调用Gemini API"""
         start_time = asyncio.get_event_loop().time()
         
@@ -314,6 +315,132 @@ class GeminiProvider(BaseAIProvider):
         return task_type in self.capabilities
 
 
+class AurapaiProvider(BaseAIProvider):
+    """Aurapai 提供商 - 支持简单的 OpenAI-like Chat Completions 接口，带流式输出"""
+
+    def __init__(self, api_key: str = "", base_url: str = "http://aurapai.dpdns.org/api/v1/chat/completions", model: str = "models/gemini-2.5-flash"):
+        super().__init__()
+        self.name = "Aurapai"
+        self.base_url = base_url
+        self.api_key = api_key
+        self.model = model
+        self.cost_per_1k_tokens = 0.0
+        self.capabilities = [
+            TaskType.IMPROVE_TEXT,
+            TaskType.SUMMARIZE,
+            TaskType.TRANSLATE,
+            TaskType.BRAINSTORM,
+            TaskType.GRAMMAR_CHECK,
+            TaskType.GENERATE_CONTENT
+        ]
+
+    async def generate(self, request: AIRequest, progress_callback: Optional[Callable[[str], None]] = None) -> AIResponse:
+        """调用 Aurapai，若服务器以 chunked/text 或 SSE 返回则逐步回传 chunk。否则一次性返回。"""
+        start_time = asyncio.get_event_loop().time()
+        try:
+            prompt = self._build_prompt(request)
+            payload = {
+                "model": self.model,
+                "messages": [{"role": "user", "content": prompt}]
+            }
+
+            headers = {
+                "Content-Type": "application/json",
+            }
+            if self.api_key:
+                headers["Authorization"] = f"Bearer {self.api_key}"
+
+            # 使用流式请求读取服务器可能发过来的分块数据
+            async with httpx.AsyncClient(timeout=120.0) as client:
+                async with client.stream("POST", self.base_url, json=payload, headers=headers) as resp:
+                    resp.raise_for_status()
+
+                    content_accum = ""
+
+                    # 尝试以文本流方式迭代
+                    async for chunk in resp.aiter_text():
+                        if not chunk:
+                            continue
+                        content_accum += chunk
+                        # 回调上层处理流数据（UI 更新）
+                        if progress_callback:
+                            try:
+                                # 支持同步或异步回调：如果是协程函数则 await，否则直接调用；
+                                if asyncio.iscoroutinefunction(progress_callback):
+                                    await progress_callback(chunk)
+                                else:
+                                    maybe = progress_callback(chunk)
+                                    # 如果回调返回了一个 coroutine（仍然异步），则 await 它
+                                    if asyncio.iscoroutine(maybe):
+                                        await maybe
+                            except Exception:
+                                pass
+
+                    # 如果服务没有分块返回，上面会得到完整内容一次性追加
+                    processing_time = asyncio.get_event_loop().time() - start_time
+                    # 尝试解析为 JSON 并抽取常见字段
+                    parsed = None
+                    try:
+                        parsed = json.loads(content_accum)
+                    except Exception:
+                        parsed = None
+
+                    final_text = ""
+                    if isinstance(parsed, dict):
+                        # 兼容 OpenAI-like 格式
+                        if "choices" in parsed and parsed["choices"]:
+                            choice = parsed["choices"][0]
+                            if "message" in choice and "content" in choice["message"]:
+                                final_text = choice["message"]["content"]
+                        elif "output" in parsed:
+                            final_text = parsed.get("output", "")
+                        else:
+                            final_text = content_accum
+                    else:
+                        final_text = content_accum
+
+                    return AIResponse(
+                        success=True,
+                        content=final_text,
+                        provider=AIProvider.AURAPAI,
+                        cost=0.0,
+                        processing_time=processing_time,
+                        metadata={"raw": parsed or content_accum}
+                    )
+
+        except Exception as e:
+            processing_time = asyncio.get_event_loop().time() - start_time
+            return AIResponse(
+                success=False,
+                content="",
+                provider=AIProvider.AURAPAI,
+                cost=0.0,
+                processing_time=processing_time,
+                error_message=str(e)
+            )
+
+    def _build_prompt(self, request: AIRequest) -> str:
+        # 重用 GeminiProvider 的 prompt 逻辑（英文版），简单对齐
+        prompts = {
+            TaskType.IMPROVE_TEXT: f"Improve the following text for clarity, accuracy, and professionalism:\n\n{request.content}",
+            TaskType.SUMMARIZE: f"Summarize the key points of the following content:\n\n{request.content}",
+            TaskType.TRANSLATE: f"Translate the following text to {request.context.get('target_language', 'English')}:\n\n{request.content}",
+            TaskType.BRAINSTORM: f"Generate 5 creative ideas based on the following topic:\n\n{request.content}",
+            TaskType.GRAMMAR_CHECK: f"Check the following text for grammar errors and provide corrections:\n\n{request.content}",
+            TaskType.GENERATE_CONTENT: f"Generate content based on the following requirements:\n\n{request.content}"
+        }
+        return prompts.get(request.task_type, request.content)
+
+    def get_cost_estimate(self, request: AIRequest) -> float:
+        return 0.0
+
+    def is_available(self) -> bool:
+        return bool(self.base_url)
+
+    def supports_task(self, task_type: TaskType) -> bool:
+        return task_type in self.capabilities
+
+
 class AIRouter:
     """AI服务智能路由器"""
     
@@ -385,6 +512,7 @@ class AIWorker(QThread):
     # 信号
     response_ready = pyqtSignal(AIResponse)
     error_occurred = pyqtSignal(str)
+    response_chunk = pyqtSignal(str)
     
     def __init__(self, provider: BaseAIProvider, request: AIRequest):
         super().__init__()
@@ -398,12 +526,18 @@ class AIWorker(QThread):
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             
-            # 执行异步调用
-            response = loop.run_until_complete(
-                self.provider.generate(self.request)
-            )
-            
-            # 发出信号
+            # 将 provider.generate 包装，允许 progress_callback 将 chunk 通过信号发出
+            async def _run_and_stream():
+                result = await self.provider.generate(
+                    self.request,
+                    progress_callback=lambda s: self.response_chunk.emit(s)
+                )
+                return result
+
+            # 执行并等待最终结果
+            response = loop.run_until_complete(_run_and_stream())
+
+            # 发出最终信号
             self.response_ready.emit(response)
             
         except Exception as e:
@@ -418,6 +552,7 @@ class AIManager(QObject):
 
     # 信号
     response_received = pyqtSignal(AIResponse)
+    response_chunked = pyqtSignal(str)
     status_changed = pyqtSignal(str)
 
     def __init__(self, provider_manager=None):
@@ -445,6 +580,13 @@ class AIManager(QObject):
                     model=config.model
                 )
                 self.router.register_provider(provider, AIProvider.GEMINI)
+            elif config.provider_type.value == "aurapai":
+                provider = AurapaiProvider(
+                    api_key=config.api_key,
+                    base_url=config.base_url or "http://aurapai.dpdns.org/api/v1/chat/completions",
+                    model=config.model or "models/gemini-2.5-flash"
+                )
+                self.router.register_provider(provider, AIProvider.AURAPAI)
             # 可以在这里添加更多提供商类型
         
     def configure_gemini(self, api_key: str):
@@ -496,11 +638,12 @@ class AIManager(QObject):
             # 创建工作线程
             self.current_worker = AIWorker(provider, request)
             self.current_worker.response_ready.connect(self._on_response_ready)
+            self.current_worker.response_chunk.connect(lambda s: self.response_chunked.emit(s))
             self.current_worker.error_occurred.connect(self._on_error_occurred)
             self.current_worker.finished.connect(self._on_worker_finished)
 
             # 启动异步请求
-            self.status_changed.emit(f"Requesting {current_config.name}...")
+            self.status_changed.emit("Thinking...")
             self.current_worker.start()
             
         except Exception as e:
@@ -511,8 +654,7 @@ class AIManager(QObject):
         self.response_received.emit(response)
         
         if response.success:
-            provider_name = response.provider.value.replace("_", " ").title()
-            self.status_changed.emit(f"Response from {provider_name} (${response.cost:.4f})")
+            self.status_changed.emit("Ready")
         else:
             self.status_changed.emit(f"Error: {response.error_message}")
     

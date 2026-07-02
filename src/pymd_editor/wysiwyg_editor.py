@@ -54,6 +54,17 @@ class WYSIWYGEditor(QWidget):
         
         # Web视图
         self.web_view = QWebEngineView()
+        
+        # 启用 JavaScript 和其他设置以支持 MathJax 和编辑功能
+        from PyQt6.QtWebEngineCore import QWebEngineSettings
+        settings = self.web_view.settings()
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
+        
         layout.addWidget(self.web_view)
         
     def _setup_web_view(self):

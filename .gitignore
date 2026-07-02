@@ -48,6 +48,13 @@ PyMDEditor_Distribution/
 PyMDEditor_Windows_*.zip
 PyMDEditor_v*.zip
 
+# Large binary release artifacts (exceed GitHub 100 MB limit)
+release/
+Output/*.exe
+Output/*.msi
+Output/*.pak
+*.pak
+
 # Test files
 test_*.py
 *_test.py

@@ -6,6 +6,7 @@ from pathlib import Path
 from PyQt6.QtCore import QTimer, Qt, QUrl
 from PyQt6.QtGui import QAction, QCloseEvent
 from PyQt6.QtWidgets import (
+    QApplication,
     QFileDialog,
     QMainWindow,
     QMessageBox,
@@ -14,6 +15,7 @@ from PyQt6.QtWidgets import (
     QTextEdit,
     QToolBar,
     QTabWidget,
+    QTabBar,
     QWidget,
     QHBoxLayout,
 )
@@ -26,6 +28,7 @@ from .wysiwyg_editor import EnhancedWYSIWYGEditor
 from .three_column_layout import ThreeColumnLayout, AIAssistantPanel
 from .ai_settings import get_ai_manager
 from .updater import UpdateManager
+from .pdf_tools import PDFViewer, PDFConverter, PDFMergeDialog, PDFSplitDialog
 
 
 class MainWindow(QMainWindow):
@@ -39,17 +42,22 @@ class MainWindow(QMainWindow):
         self._dark_mode: bool = False
         self._dirty: bool = False
         self._current_language = 'zh'  # 初始化语言设置
+        self._zen_mode: bool = False
+        self._current_theme: str = "Default"
 
         # Core widgets
         self.editor = QTextEdit(self)
         self._setup_drag_drop()  # 启用拖放功能
         self.preview = QWebEngineView(self)
-        # Enable image loading and mixed content
+        # Enable image loading, mixed content, and JavaScript for MathJax
         from PyQt6.QtWebEngineCore import QWebEngineSettings
         settings = self.preview.settings()
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, True)
         settings.setAttribute(QWebEngineSettings.WebAttribute.AllowRunningInsecureContent, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanOpenWindows, False)
+        settings.setAttribute(QWebEngineSettings.WebAttribute.LocalStorageEnabled, True)
         self.wysiwyg_editor = EnhancedWYSIWYGEditor(self)
         self.wysiwyg_editor.set_base_path(Path.cwd())
         self.renderer = MarkdownRenderer()
@@ -90,6 +98,9 @@ class MainWindow(QMainWindow):
         # 连接AI信号
         self.ai_assistant.ai_request.connect(self.ai_manager.process_request)
         self.ai_manager.response_received.connect(self._on_ai_response)
+        # 流式片段信号（用于展示流式输出）
+        if hasattr(self.ai_manager, 'response_chunked'):
+            self.ai_manager.response_chunked.connect(self.ai_assistant.display_response_chunk)
         self.ai_manager.status_changed.connect(self._on_ai_status_changed)
 
         # 为WYSIWYG模式创建AI助手容器
@@ -105,10 +116,22 @@ class MainWindow(QMainWindow):
         self.wysiwyg_ai_assistant.ai_request.connect(self.ai_manager.process_request)
         self.wysiwyg_ai_assistant.hide()  # 默认隐藏
         wysiwyg_layout.addWidget(self.wysiwyg_ai_assistant, 1)
+        if hasattr(self.ai_manager, 'response_chunked'):
+            self.ai_manager.response_chunked.connect(self.wysiwyg_ai_assistant.display_response_chunk)
 
         # 添加标签页
         self.tab_widget.addTab(self.three_column_layout, self._get_text('three_column_mode'))
         self.tab_widget.addTab(self.wysiwyg_container, self._get_text('wysiwyg_mode'))
+
+        # Enable closable tabs for PDF viewer
+        self.tab_widget.setTabsClosable(True)
+        self.tab_widget.tabCloseRequested.connect(self._on_tab_close_requested)
+        # Hide close buttons for main editors
+        try:
+            self.tab_widget.tabBar().setTabButton(0, QTabBar.ButtonPosition.RightSide, None)
+            self.tab_widget.tabBar().setTabButton(1, QTabBar.ButtonPosition.RightSide, None)
+        except Exception:
+            pass  # Fail safe
 
         self.setCentralWidget(self.tab_widget)
 
@@ -151,9 +174,15 @@ class MainWindow(QMainWindow):
                 'help_menu': '帮助',
                 'check_updates': '检查更新',
                 'insert_image': '插入图片',
+                'import_pdf': '导入 PDF (为 Markdown)',
+                'merge_pdf': '合并 PDF…',
+                'split_pdf': '拆分 PDF…',
+                'pdf_tools_menu': 'PDF 工具',
                 'toggle_ai': '显示AI助手',
                 'three_column_mode': '三栏编辑',
-                'wysiwyg_mode': 'WYSIWYG 编辑'
+                'wysiwyg_mode': 'WYSIWYG 编辑',
+                'zen_mode': '禅模式',
+                'themes': '主题'
             },
             'en': {
                 'file_menu': 'File',
@@ -170,9 +199,15 @@ class MainWindow(QMainWindow):
                 'help_menu': 'Help',
                 'check_updates': 'Check for Updates',
                 'insert_image': 'Insert Image',
+                'import_pdf': 'Import PDF (as Markdown)',
+                'merge_pdf': 'Merge PDFs…',
+                'split_pdf': 'Split PDF…',
+                'pdf_tools_menu': 'PDF Tools',
                 'toggle_ai': 'Toggle AI Assistant',
                 'three_column_mode': 'Three Column Editor',
-                'wysiwyg_mode': 'WYSIWYG Editor'
+                'wysiwyg_mode': 'WYSIWYG Editor',
+                'zen_mode': 'Zen Mode',
+                'themes': 'Themes'
             }
         }
         return texts.get(self._current_language, {}).get(key, key)
@@ -200,8 +235,19 @@ class MainWindow(QMainWindow):
         self.export_word_action.setText(self._get_text('export_word'))
         self.toggle_theme_action.setText(self._get_text('toggle_theme'))
         self.insert_image_action.setText(self._get_text('insert_image'))
+        if hasattr(self, 'import_pdf_action'):
+            self.import_pdf_action.setText(self._get_text('import_pdf'))
+        if hasattr(self, 'merge_pdf_action'):
+            self.merge_pdf_action.setText(self._get_text('merge_pdf'))
+        if hasattr(self, 'split_pdf_action'):
+            self.split_pdf_action.setText(self._get_text('split_pdf'))
+        if hasattr(self, 'pdf_tools_menu'):
+            self.pdf_tools_menu.setTitle(self._get_text('pdf_tools_menu'))
+        self.toggle_ai_action.setText(self._get_text('toggle_ai'))
         self.toggle_ai_action.setText(self._get_text('toggle_ai'))
         self.check_updates_action.setText(self._get_text('check_updates'))
+        self.zen_mode_action.setText(self._get_text('zen_mode'))
+        self.themes_menu.setTitle(self._get_text('themes'))
         
         # Update tab texts
         self.tab_widget.setTabText(0, self._get_text('three_column_mode'))
@@ -229,7 +275,7 @@ class MainWindow(QMainWindow):
         self.save_as_action.setShortcut("Ctrl+Shift+S")
         self.save_as_action.triggered.connect(self.save_file_as)
 
-        self.toggle_theme_action = QAction("切换主题", self)
+        self.toggle_theme_action = QAction("切换深色模式", self)
         self.toggle_theme_action.setShortcut("Ctrl+T")
         self.toggle_theme_action.triggered.connect(self.toggle_theme)
 
@@ -250,6 +296,18 @@ class MainWindow(QMainWindow):
         self.insert_image_action.setShortcut("Ctrl+Shift+I")
         self.insert_image_action.triggered.connect(self.insert_image)
 
+        # Import PDF Action
+        self.import_pdf_action = QAction("导入 PDF", self)
+        self.import_pdf_action.triggered.connect(self.import_pdf_to_markdown)
+
+        # Merge PDF Action
+        self.merge_pdf_action = QAction("合并 PDF…", self)
+        self.merge_pdf_action.triggered.connect(self.merge_pdfs)
+
+        # Split PDF Action
+        self.split_pdf_action = QAction("拆分 PDF…", self)
+        self.split_pdf_action.triggered.connect(self.split_pdf)
+
         # Language menu actions
         self.lang_chinese_action = QAction("中文", self)
         self.lang_chinese_action.setCheckable(True)
@@ -265,6 +323,22 @@ class MainWindow(QMainWindow):
         self.toggle_ai_action.setCheckable(True)
         self.toggle_ai_action.setChecked(False)
         self.toggle_ai_action.triggered.connect(self._toggle_wysiwyg_ai)
+
+        # Zen Mode
+        self.zen_mode_action = QAction("禅模式", self)
+        self.zen_mode_action.setShortcut("F11")
+        self.zen_mode_action.setCheckable(True)
+        self.zen_mode_action.triggered.connect(self.toggle_zen_mode)
+
+        # Themes
+        self.theme_actions = {}
+        themes = ["Default", "Midnight Coffee", "Forest Walk", "Paper & Ink"]
+        for theme in themes:
+            action = QAction(theme, self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, t=theme: self.set_theme(t))
+            self.theme_actions[theme] = action
+        self.theme_actions["Default"].setChecked(True)
 
         # Update action
         self.check_updates_action = QAction(self._get_text('check_updates'), self)
@@ -303,10 +377,27 @@ class MainWindow(QMainWindow):
         file_menu.addAction(self.export_word_action)
         file_menu.addSeparator()
         file_menu.addAction(self.insert_image_action)
+        file_menu.addSeparator()
+
+        # PDF Tools submenu
+        self.pdf_tools_menu = file_menu.addMenu(self._get_text('pdf_tools_menu'))
+        if hasattr(self, 'import_pdf_action'):
+            self.pdf_tools_menu.addAction(self.import_pdf_action)
+        self.pdf_tools_menu.addAction(self.merge_pdf_action)
+        self.pdf_tools_menu.addAction(self.split_pdf_action)
         
         # View menu
         view_menu = menubar.addMenu(self._get_text('view_menu'))
         view_menu.addAction(self.toggle_theme_action)
+        view_menu.addSeparator()
+        
+        # Themes Submenu
+        self.themes_menu = view_menu.addMenu(self._get_text('themes'))
+        for action in self.theme_actions.values():
+            self.themes_menu.addAction(action)
+            
+        view_menu.addSeparator()
+        view_menu.addAction(self.zen_mode_action)
         view_menu.addSeparator()
         view_menu.addAction(self.toggle_ai_action)
         
@@ -325,6 +416,16 @@ class MainWindow(QMainWindow):
         text = self.editor.toPlainText()
         self.status.showMessage(f"字数: {len(text)}", 1500)
         self._render_timer.start()
+
+    def _on_tab_close_requested(self, index: int):
+        # Prevent closing main editor tabs
+        if index < 2:
+            return
+        
+        widget = self.tab_widget.widget(index)
+        if widget:
+            widget.deleteLater()
+        self.tab_widget.removeTab(index)
 
     def _on_check_updates(self):
         self.update_manager.check_for_updates(self)
@@ -405,12 +506,66 @@ class MainWindow(QMainWindow):
         self.render_preview()
 
     def open_file(self):
-        if not self._confirm_discard_changes():
-            return
-        path, _ = QFileDialog.getOpenFileName(self, "打开 Markdown 文件", str(Path.home()), "Markdown (*.md)")
+        path, _ = QFileDialog.getOpenFileName(self, "打开文件", str(Path.home()), "Markdown (*.md);;PDF Files (*.pdf)")
         if not path:
             return
-        self.load_file(Path(path))
+        
+        file_path = Path(path)
+        if file_path.suffix.lower() == '.pdf':
+            self.open_pdf_viewer(file_path)
+            return
+            
+        if not self._confirm_discard_changes():
+            return
+        self.load_file(file_path)
+
+    def open_pdf_viewer(self, path: Path):
+        """Open PDF in a new viewer tab."""
+        viewer = PDFViewer(self)
+        try:
+            viewer.load_file(str(path))
+            # Add tab
+            tab_label = path.name
+            idx = self.tab_widget.addTab(viewer, f"📄 {tab_label}")
+            self.tab_widget.setCurrentIndex(idx)
+            self.status.showMessage(f"Opened PDF: {path.name}", 3000)
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to open PDF: {e}")
+
+    def import_pdf_to_markdown(self):
+        """Import PDF text into current editor."""
+        if not self._confirm_discard_changes():
+            return
+            
+        path, _ = QFileDialog.getOpenFileName(self, "Import PDF as Markdown", str(Path.home()), "PDF Files (*.pdf)")
+        if not path:
+            return
+            
+        # Show busy cursor
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        try:
+            md_text = PDFConverter.to_markdown(str(path))
+            if md_text:
+                self.editor.setPlainText(md_text)
+                self.wysiwyg_editor.set_markdown(md_text)
+                self._current_file = None 
+                self._dirty = True
+                self._update_title()
+                self.status.showMessage("PDF imported successfully", 3000)
+            else:
+                QMessageBox.warning(self, "Import Failed", "Could not extract text from PDF.")
+        finally:
+            QApplication.restoreOverrideCursor()
+
+    def merge_pdfs(self):
+        """Open the PDF merge dialog."""
+        dlg = PDFMergeDialog(self)
+        dlg.exec()
+
+    def split_pdf(self):
+        """Open the PDF split dialog."""
+        dlg = PDFSplitDialog(self)
+        dlg.exec()
 
     def load_file(self, file_path: Path):
         """加载指定的文件（供外部调用，如命令行参数）"""
@@ -459,6 +614,64 @@ class MainWindow(QMainWindow):
         self._dark_mode = not self._dark_mode
         self.render_preview()
         # 同时更新WYSIWYG编辑器的主题
+        self.wysiwyg_editor.set_dark_mode(self._dark_mode)
+
+    def toggle_zen_mode(self, checked: bool):
+        """Toggle Zen Mode (Distraction Free)"""
+        self._zen_mode = checked
+        if checked:
+            self.menuBar().hide()
+            self.status.hide()
+            # Hide toolbar if exists (we created it in _init_toolbar but didn't save reference to self, need to find it)
+            for toolbar in self.findChildren(QToolBar):
+                toolbar.hide()
+            self.showFullScreen()
+        else:
+            self.menuBar().show()
+            self.status.show()
+            for toolbar in self.findChildren(QToolBar):
+                toolbar.show()
+            self.showNormal()
+
+    def set_theme(self, theme_name: str):
+        """Set application theme"""
+        self._current_theme = theme_name
+        
+        # Update check states
+        for name, action in self.theme_actions.items():
+            action.setChecked(name == theme_name)
+            
+        # Apply theme styles
+        if theme_name == "Midnight Coffee":
+            self.setStyleSheet("""
+                QMainWindow { background-color: #2b2b2b; color: #dcdcdc; }
+                QTextEdit { background-color: #3c3f41; color: #dcdcdc; border: none; font-family: 'Consolas', 'Monaco', monospace; font-size: 14px; }
+                QStatusBar { background-color: #2b2b2b; color: #808080; }
+                QMenuBar { background-color: #2b2b2b; color: #dcdcdc; }
+                QMenuBar::item:selected { background-color: #3c3f41; }
+                QMenu { background-color: #2b2b2b; color: #dcdcdc; border: 1px solid #3c3f41; }
+                QMenu::item:selected { background-color: #3c3f41; }
+            """)
+            self._dark_mode = True
+        elif theme_name == "Forest Walk":
+            self.setStyleSheet("""
+                QMainWindow { background-color: #f0f5f0; color: #2e3b2e; }
+                QTextEdit { background-color: #ffffff; color: #2e3b2e; border: 1px solid #d0dcd0; font-family: 'Georgia', serif; font-size: 15px; }
+                QStatusBar { background-color: #e0e5e0; color: #4e5b4e; }
+            """)
+            self._dark_mode = False
+        elif theme_name == "Paper & Ink":
+            self.setStyleSheet("""
+                QMainWindow { background-color: #fdfbf7; color: #1a1a1a; }
+                QTextEdit { background-color: #fffefc; color: #1a1a1a; border: none; font-family: 'Times New Roman', serif; font-size: 16px; }
+                QStatusBar { background-color: #fdfbf7; color: #5a5a5a; }
+            """)
+            self._dark_mode = False
+        else: # Default
+            self.setStyleSheet("")
+            self._dark_mode = False
+            
+        self.render_preview()
         self.wysiwyg_editor.set_dark_mode(self._dark_mode)
 
     def export_pdf(self):

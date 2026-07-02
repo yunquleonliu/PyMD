@@ -1,0 +1,15 @@
+__pycache__/
+*.pyc
+*.pyo
+.git/
+.vscode/
+build/
+dist/
+Output/
+release/
+PyMDEditor_Distribution/
+*.spec
+*.egg-info/
+data/
+*.log
+.env

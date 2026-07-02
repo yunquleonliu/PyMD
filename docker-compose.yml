@@ -1,0 +1,12 @@
+services:
+  pymd:
+    build: .
+    image: pymd/editor
+    ports:
+      - "8765:8765"
+    volumes:
+      # Mount a local folder as /data inside the container.
+      # Override DOCS_DIR in your shell or a .env file, e.g.:
+      #   DOCS_DIR=~/Documents docker compose up
+      - "${DOCS_DIR:-./data}:/data"
+    restart: unless-stopped
