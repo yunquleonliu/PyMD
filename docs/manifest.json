@@ -1,0 +1,23 @@
+{
+  "name": "PyMD Editor",
+  "short_name": "PyMD",
+  "description": "Local-first Markdown and PDF editor — data always stays on your machine.",
+  "start_url": "/PyMD/",
+  "scope": "/PyMD/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#0078d4",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [],
+  "categories": [
+    "productivity",
+    "utilities"
+  ]
+}

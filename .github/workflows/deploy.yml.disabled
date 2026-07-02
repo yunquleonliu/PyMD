@@ -1,5 +1,5 @@
 # Deploy PyMD Editor static web app to GitHub Pages
-# Triggered on every push to main, or manually.
+# Triggered on every push to master, or manually.
 #
 # The static/ folder is the complete deployable app (Phase 3 + Phase 4).
 # No build step needed — it's vanilla HTML/CSS/JS.
@@ -8,21 +8,21 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'src/pymd_editor/server/static/**'
-      - 'build_web.py'
-      - '.github/workflows/deploy.yml'
+    branches: [master]
+    # paths:
+    #   - "src/pymd_editor/server/static/**"
+    #   - "build_web.py"
+    #   - ".github/workflows/deploy.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
-  pages:    write
+  pages: write
   id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build-and-deploy:
@@ -37,10 +37,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build static app
-        run: python build_web.py --out dist/web
+        run: python build_web.py --out dist/web --base-url /PyMD/
 
-      - name: Setup GitHub Pages
+      - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
