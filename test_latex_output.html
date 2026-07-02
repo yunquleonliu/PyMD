@@ -1,0 +1,77 @@
+
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8" />
+<style>
+
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif; margin: 0; padding: 0; }
+.content { padding: 16px 24px; max-width: 1000px; margin: 0 auto; }
+pre, code { background: #f5f5f7; border-radius: 6px; }
+pre { padding: 12px; overflow-x: auto; }
+blockquote { border-left: 4px solid #e0e0e0; margin: 0; padding: 8px 16px; color: #555; background: #fafafa; }
+table { border-collapse: collapse; }
+th, td { border: 1px solid #ddd; padding: 6px 10px; }
+a { color: #0066cc; }
+/* Image styling */
+img { 
+    max-width: 100%; 
+    height: auto; 
+    border-radius: 8px; 
+    margin: 10px 0; 
+    display: block;
+}
+.image-caption { 
+    text-align: center; 
+    font-style: italic; 
+    color: #666; 
+    font-size: 0.9em; 
+    margin-top: 5px; 
+}
+/* Page break support for printing/PDF */
+.pagebreak, div[style*="page-break"] { 
+    page-break-after: always; 
+    page-break-inside: avoid;
+    break-after: page;
+    height: 0;
+    margin: 0;
+    padding: 0;
+}
+@media print {
+    .pagebreak, div[style*="page-break"] {
+        page-break-after: always;
+        page-break-inside: avoid;
+        break-after: page;
+    }
+}
+
+</style>
+<!-- MathJax for LaTeX math rendering -->
+<script>
+window.MathJax = {
+  tex: {
+    inlineMath: [['$', '$'], ['\\(', '\\)']],
+    displayMath: [['$$', '$$'], ['\\[', '\\]']],
+    processEscapes: true,
+    processEnvironments: true
+  },
+  options: {
+    skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre']
+  }
+};
+</script>
+<script src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js" async></script>
+</head>
+<body>
+<div class="content"><h1 id="latex-测试">LaTeX 测试</h1>
+
+<p>行内公式: $E = mc^2$</p>
+
+<p>块级公式:</p>
+
+<p>$$
+\int_{-\infty}^{\infty} e^{-x^2} dx = \sqrt{\pi}
+$$</p>
+</div>
+</body>
+</html>

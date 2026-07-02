@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="PyMD Editor — local-first Markdown editor">
+  <title>PyMD Editor</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <!-- marked.js for client-side rendering (Phase 3 standalone / PWA mode) -->
+  <script src="https://cdn.jsdelivr.net/npm/marked@12/marked.min.js"></script>
+  <!-- Turndown: HTML → Markdown (used by WYSIWYG mode) -->
+  <script src="https://cdn.jsdelivr.net/npm/turndown@7/dist/turndown.js"></script>
+</head>
+<body>
+
+  <!-- ── Toolbar ──────────────────────────────────────────────────────── -->
+  <header class="toolbar" role="toolbar" aria-label="Main toolbar">
+    <span class="brand" aria-label="PyMD Editor">PyMD</span>
+    <div class="toolbar-sep" role="separator"></div>
+
+    <button class="btn" id="btn-new"  title="New file (Ctrl+N)">New</button>
+    <button class="btn" id="btn-save" title="Save (Ctrl+S)">Save</button>
+    <!-- Phase 3: shown only in standalone/PWA mode (no local server) -->
+    <button class="btn hidden" id="btn-open-folder" title="Open a local folder">📂 Open Folder</button>
+
+    <div class="toolbar-sep" role="separator"></div>
+
+    <button class="btn" id="btn-export-word" title="Export as Word (.docx)">⬇ Word</button>
+    <button class="btn" id="btn-print"       title="Print / Save as PDF">🖨 Print</button>
+    <button class="btn" id="btn-pdf-tools"   title="PDF Tools">📄 PDF</button>
+
+    <div class="toolbar-sep" role="separator"></div>
+
+    <div class="view-toggle" role="group" aria-label="View mode">
+      <button class="view-btn active" id="vbtn-split"   title="Split view">⊟</button>
+      <button class="view-btn"        id="vbtn-source"  title="Source only">✎</button>
+      <button class="view-btn"        id="vbtn-preview" title="Preview only">👁</button>
+      <button class="view-btn"        id="vbtn-wysiwyg" title="WYSIWYG edit">W</button>
+    </div>
+
+    <div class="toolbar-sep" role="separator"></div>
+
+    <label class="dark-toggle" title="Toggle dark mode">
+      <input type="checkbox" id="dark-toggle" aria-label="Dark mode">
+      Dark
+    </label>
+
+    <div class="file-info">
+      <span id="filename">untitled.md</span>
+      <span id="dirty-indicator" aria-label="Unsaved changes" title="Unsaved changes"></span>
+    </div>
+  </header>
+
+  <!-- ── Main layout ──────────────────────────────────────────────────── -->
+  <div class="main-layout">
+
+    <!-- Sidebar: file browser -->
+    <aside class="sidebar" aria-label="File browser">
+      <div class="sidebar-header">
+        <span>Files</span>
+        <div class="sidebar-btns">
+          <button id="btn-new-folder" title="New folder">📁+</button>
+          <button id="btn-new-file"   title="New file">+</button>
+        </div>
+      </div>
+      <div id="file-tree" role="tree" aria-label="File tree"></div>
+    </aside>
+
+    <!-- Editor pane -->
+    <div class="editor-pane" id="editor-pane">
+      <!-- Formatting toolbar -->
+      <div class="fmt-toolbar" id="fmt-toolbar" role="toolbar" aria-label="Formatting">
+        <button class="fmt-btn" data-action="bold"   title="Bold (Ctrl+B)"><b>B</b></button>
+        <button class="fmt-btn" data-action="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+        <button class="fmt-btn" data-action="strike" title="Strikethrough">~~</button>
+        <span class="fmt-sep"></span>
+        <button class="fmt-btn" data-action="h1"  title="Heading 1">H1</button>
+        <button class="fmt-btn" data-action="h2"  title="Heading 2">H2</button>
+        <button class="fmt-btn" data-action="h3"  title="Heading 3">H3</button>
+        <span class="fmt-sep"></span>
+        <button class="fmt-btn" data-action="code"       title="Inline code">`c`</button>
+        <button class="fmt-btn" data-action="codeblock"  title="Code block">```</button>
+        <span class="fmt-sep"></span>
+        <button class="fmt-btn" data-action="link"   title="Link">🔗</button>
+        <button class="fmt-btn" data-action="image"  title="Image">🖼</button>
+        <span class="fmt-sep"></span>
+        <button class="fmt-btn" data-action="ul"    title="Bullet list">• List</button>
+        <button class="fmt-btn" data-action="ol"    title="Numbered list">1. List</button>
+        <button class="fmt-btn" data-action="quote" title="Blockquote">&gt; Quote</button>
+        <span class="fmt-sep"></span>
+        <button class="fmt-btn" data-action="hr"    title="Horizontal rule">—</button>
+        <button class="fmt-btn" data-action="table" title="Insert table">⊞ Table</button>
+      </div>
+      <textarea
+        id="editor"
+        placeholder="Start writing Markdown…"
+        spellcheck="false"
+        aria-label="Markdown editor"
+        aria-multiline="true"
+      ></textarea>
+      <!-- WYSIWYG editor: shown only in WYSIWYG mode -->
+      <div
+        id="wysiwyg-editor"
+        contenteditable="true"
+        class="wysiwyg-editor hidden"
+        spellcheck="true"
+        role="textbox"
+        aria-multiline="true"
+        aria-label="WYSIWYG editor"
+      ></div>
+    </div>
+
+    <!-- Preview pane -->
+    <div class="preview-pane" id="preview-pane">
+      <div class="pane-title" id="preview-pane-title">Preview</div>
+      <!-- PDF toolbar — shown only when viewing a PDF -->
+      <div class="pdf-viewer-bar hidden" id="pdf-viewer-bar">
+        <span class="pdf-viewer-name" id="pdf-viewer-name"></span>
+        <button class="btn" id="pdf-viewer-download" title="Download PDF">⬇</button>
+        <button class="btn" id="pdf-viewer-tools" title="Open PDF Tools panel">🛠 Tools</button>
+      </div>
+      <iframe
+        id="preview"
+        sandbox="allow-scripts allow-same-origin"
+        title="Markdown preview"
+        aria-label="Markdown preview"
+      ></iframe>
+      <!-- PDF viewer iframe — separate from markdown preview -->
+      <iframe
+        id="pdf-viewer"
+        class="hidden"
+        title="PDF viewer"
+        aria-label="PDF viewer"
+      ></iframe>
+    </div>
+
+  </div>
+
+  <!-- ── Context menu ────────────────────────────────────────────────── -->
+  <div class="ctx-menu hidden" id="ctx-menu" role="menu">
+    <div class="ctx-item" id="ctx-rename">✏ Rename</div>
+    <div class="ctx-item" id="ctx-delete">🗑 Delete</div>
+    <div class="ctx-sep"></div>
+    <div class="ctx-item" id="ctx-info">ℹ Info</div>
+  </div>
+
+  <!-- ── PDF Tools modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="pdf-modal" role="dialog" aria-modal="true" aria-labelledby="pdf-modal-title">
+    <div class="modal pdf-modal">
+      <div class="pdf-modal-header">
+        <h3 id="pdf-modal-title">📄 PDF Tools</h3>
+        <button class="modal-close" id="pdf-modal-close" aria-label="Close">×</button>
+      </div>
+
+      <!-- Tab bar -->
+      <div class="pdf-tabs" role="tablist">
+        <button class="pdf-tab active" data-tab="extract" role="tab">Extract</button>
+        <button class="pdf-tab" data-tab="merge"   role="tab">Merge</button>
+        <button class="pdf-tab" data-tab="insert"  role="tab">Insert</button>
+        <button class="pdf-tab" data-tab="toword"  role="tab">→ Word</button>
+        <button class="pdf-tab" data-tab="toexcel" role="tab">→ Excel</button>
+      </div>
+
+      <!-- Info bar -->
+      <div class="pdf-info-bar" id="pdf-info-bar">No PDF selected</div>
+
+      <!-- Tab: Extract -->
+      <div class="pdf-tab-content active" id="pdf-tab-extract">
+        <p class="pdf-help">Select a PDF in the file tree, then specify pages to extract.</p>
+        <label>Pages <small>(e.g. 1-3, 5, 7)</small></label>
+        <input type="text" id="pdf-extract-pages" placeholder="1-3, 5" autocomplete="off">
+        <button class="btn primary" id="btn-pdf-extract">⬇ Extract Pages</button>
+      </div>
+
+      <!-- Tab: Merge -->
+      <div class="pdf-tab-content" id="pdf-tab-merge">
+        <p class="pdf-help">Drag PDFs from the sidebar or click Add to build the merge list.</p>
+        <div class="pdf-merge-list" id="pdf-merge-list"></div>
+        <div class="pdf-merge-controls">
+          <button class="btn" id="btn-pdf-merge-add">+ Add from tree</button>
+          <button class="btn" id="btn-pdf-merge-clear">Clear</button>
+        </div>
+        <input type="text" id="pdf-merge-filename" placeholder="merged.pdf" autocomplete="off">
+        <button class="btn primary" id="btn-pdf-merge">⬇ Merge</button>
+      </div>
+
+      <!-- Tab: Insert -->
+      <div class="pdf-tab-content" id="pdf-tab-insert">
+        <p class="pdf-help">Insert one PDF into another at a page position.</p>
+        <label>Base PDF <small>(selected in tree)</small></label>
+        <div class="pdf-path-display" id="pdf-insert-base">—</div>
+        <label>Insert PDF</label>
+        <div class="pdf-path-display" id="pdf-insert-src">—</div>
+        <button class="btn" id="btn-pdf-insert-pick">Pick insert PDF from tree</button>
+        <label>After page <small>(0 = beginning)</small></label>
+        <input type="number" id="pdf-insert-after" value="0" min="0">
+        <button class="btn primary" id="btn-pdf-insert">⬇ Insert &amp; Download</button>
+      </div>
+
+      <!-- Tab: → Word -->
+      <div class="pdf-tab-content" id="pdf-tab-toword">
+        <p class="pdf-help">Convert the selected PDF to a Word document (.docx).</p>
+        <div class="pdf-path-display" id="pdf-toword-path">—</div>
+        <button class="btn primary" id="btn-pdf-toword">⬇ Convert to Word</button>
+      </div>
+
+      <!-- Tab: → Excel -->
+      <div class="pdf-tab-content" id="pdf-tab-toexcel">
+        <p class="pdf-help">Extract text from each page into an Excel sheet (.xlsx).</p>
+        <div class="pdf-path-display" id="pdf-toexcel-path">—</div>
+        <button class="btn primary" id="btn-pdf-toexcel">⬇ Convert to Excel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Rename modal ─────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="rename-modal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h3>Rename</h3>
+      <input type="text" id="rename-input" placeholder="new-name.md" autocomplete="off" spellcheck="false">
+      <div class="modal-actions">
+        <button class="btn" id="rename-cancel">Cancel</button>
+        <button class="btn primary" id="rename-confirm">Rename</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── New folder modal ─────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="newfolder-modal" role="dialog" aria-modal="true">
+    <div class="modal">
+      <h3>New Folder</h3>
+      <input type="text" id="newfolder-input" placeholder="folder-name" autocomplete="off" spellcheck="false">
+      <div class="modal-actions">
+        <button class="btn" id="newfolder-cancel">Cancel</button>
+        <button class="btn primary" id="newfolder-confirm">Create</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Status bar ───────────────────────────────────────────────────── -->
+  <div class="statusbar" role="status" aria-live="polite">
+    <span id="status">Ready — PyMD Editor</span>
+    <span class="right" id="wordcount"></span>
+  </div>
+
+  <!-- ── Save As modal ────────────────────────────────────────────────── -->
+  <div class="modal-overlay" id="saveas-modal" role="dialog" aria-modal="true" aria-labelledby="saveas-title">
+    <div class="modal">
+      <h3 id="saveas-title">Save As</h3>
+      <input
+        type="text"
+        id="saveas-input"
+        placeholder="filename.md"
+        aria-label="Filename"
+        autocomplete="off"
+        spellcheck="false"
+      >
+      <div class="modal-actions">
+        <button class="btn" id="saveas-cancel">Cancel</button>
+        <button class="btn primary" id="saveas-confirm">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

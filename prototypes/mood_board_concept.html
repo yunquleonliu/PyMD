@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyMD Mood Board Concept</title>
+    <style>
+        :root {
+            --bg-color: #1a1a1a;
+            --card-bg: #2d2d2d;
+            --text-color: #e0e0e0;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 250px;
+            background-color: #222;
+            padding: 20px;
+            border-right: 1px solid #333;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .nav-item {
+            padding: 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            color: #888;
+            transition: 0.2s;
+        }
+        .nav-item.active {
+            background-color: #333;
+            color: white;
+        }
+        .mood-board {
+            flex: 1;
+            padding: 40px;
+            overflow-y: auto;
+            background-image: radial-gradient(#333 1px, transparent 1px);
+            background-size: 20px 20px;
+        }
+        .board-title {
+            font-size: 24px;
+            margin-bottom: 30px;
+            color: #fff;
+        }
+        .masonry {
+            column-count: 3;
+            column-gap: 20px;
+        }
+        .item {
+            background-color: var(--card-bg);
+            border-radius: 12px;
+            margin-bottom: 20px;
+            break-inside: avoid;
+            overflow: hidden;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            position: relative;
+            transition: transform 0.2s;
+        }
+        .item:hover {
+            transform: translateY(-5px);
+            z-index: 10;
+        }
+        .item img {
+            width: 100%;
+            display: block;
+        }
+        .item-content {
+            padding: 15px;
+        }
+        .color-palette {
+            display: flex;
+            height: 40px;
+        }
+        .color {
+            flex: 1;
+        }
+        .sticky-note {
+            background-color: #f1c40f;
+            color: #2c3e50;
+            padding: 20px;
+            font-family: 'Comic Sans MS', cursive, sans-serif;
+            transform: rotate(-2deg);
+        }
+        .tag {
+            display: inline-block;
+            background: #333;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            margin-top: 8px;
+            color: #aaa;
+        }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="sidebar">
+        <div class="nav-item">📄 Documents</div>
+        <div class="nav-item active">🎨 Mood Board</div>
+        <div class="nav-item">⚙️ Settings</div>
+    </div>
+    
+    <div class="mood-board">
+        <div class="board-title">Project: Cyberpunk Novel</div>
+        
+        <div class="masonry">
+            <div class="item">
+                <div class="item-content" style="background: linear-gradient(to right, #ff00cc, #333399); height: 150px; display: flex; align-items: center; justify-content: center; color: white; font-weight: bold;">
+                    Neon Vibes
+                </div>
+                <div class="item-content">
+                    <div class="tag">Inspiration</div>
+                </div>
+            </div>
+
+            <div class="item sticky-note">
+                Don't forget to mention the rain. It's always raining in Sector 7.
+            </div>
+
+            <div class="item">
+                <div class="color-palette">
+                    <div class="color" style="background: #2c3e50"></div>
+                    <div class="color" style="background: #e74c3c"></div>
+                    <div class="color" style="background: #ecf0f1"></div>
+                    <div class="color" style="background: #3498db"></div>
+                </div>
+                <div class="item-content">
+                    <span style="font-size: 12px; color: #888;">Character Palette: Protagonist</span>
+                </div>
+            </div>
+
+            <div class="item">
+                <div class="item-content">
+                    <h4 style="margin: 0 0 10px 0; color: white;">Character Arc</h4>
+                    <p style="font-size: 13px; color: #aaa; margin: 0;">Starts as a street urchin -> Finds the chip -> Becomes the target -> Saves the city (reluctantly).</p>
+                </div>
+            </div>
+            
+            <div class="item">
+                 <div class="item-content" style="background: #333; height: 200px; display: flex; align-items: center; justify-content: center; color: #555;">
+                    [Image: Rainy City Street]
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

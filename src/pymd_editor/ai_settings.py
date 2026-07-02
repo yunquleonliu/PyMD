@@ -7,11 +7,12 @@ import json
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Any
 from enum import Enum
-from PyQt6.QtCore import QSettings, QObject, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QObject, pyqtSignal
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QComboBox, QGroupBox, QFormLayout, QCheckBox,
-    QMessageBox, QTabWidget, QTextEdit, QSpinBox, QDialog, QDialogButtonBox
+    QMessageBox, QTabWidget, QTextEdit, QSpinBox, QDialog, QDialogButtonBox,
+    QScrollArea
 )
 
 
@@ -93,6 +94,7 @@ class AIProviderManager(QObject):
                 name="Personal AI",
                 base_url="https://dataflowxx.dpdns.org",
                 description="免费的个人AI服务",
+                enabled=False,
                 personality="我是您的个人AI助手，可以帮助您处理文档和文本。",
                 avatar_url="🤖"
             ),
@@ -102,8 +104,20 @@ class AIProviderManager(QObject):
                 base_url="https://generativelanguage.googleapis.com",
                 model="gemini-pro",
                 description="Google的Gemini AI模型",
+                enabled=False,
                 personality="我是Google Gemini，一个强大的AI助手。",
                 avatar_url="🤖"
+            )
+            ,
+            "aurapai": AIProviderConfig(
+                provider_type=AIProviderType.CUSTOM,
+                name="Aurapai",
+                api_key="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6ImNmNTE3YWEwLWQ5NmQtNDA2NS05NWUzLTU1MWRhNWYwNjBjZCIsImV4cCI6MTc2NTg0MDM0Nn0.sxc9f9tFARgAcgsJM-4d9IuHZrP6msW2S47AY4C_1k8",
+                base_url="http://aurapai.dpdns.org/api/v1/chat/completions",
+                model="models/gemini-2.5-flash",
+                description="本地部署的 Aurapai 服务（请填写 API Key）",
+                enabled=True,
+                personality="Aurapai 助手"
             )
         }
 
@@ -210,23 +224,30 @@ class AIProviderWidget(QWidget):
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
 
         # 基本信息
         basic_group = QGroupBox("基本信息")
         basic_layout = QFormLayout()
+        basic_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        basic_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        basic_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.name_edit = QLineEdit(self.provider_config.name)
         basic_layout.addRow("名称:", self.name_edit)
 
         self.description_edit = QTextEdit(self.provider_config.description)
-        self.description_edit.setMaximumHeight(60)
+        self.description_edit.setMinimumHeight(72)
+        self.description_edit.setMaximumHeight(90)
         basic_layout.addRow("描述:", self.description_edit)
 
         self.avatar_edit = QLineEdit(self.provider_config.avatar_url)
         basic_layout.addRow("头像:", self.avatar_edit)
 
         self.personality_edit = QTextEdit(self.provider_config.personality)
-        self.personality_edit.setMaximumHeight(80)
+        self.personality_edit.setMinimumHeight(88)
+        self.personality_edit.setMaximumHeight(120)
         basic_layout.addRow("个性:", self.personality_edit)
 
         basic_group.setLayout(basic_layout)
@@ -235,6 +256,9 @@ class AIProviderWidget(QWidget):
         # API配置
         api_group = QGroupBox("API配置")
         api_layout = QFormLayout()
+        api_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        api_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+        api_layout.setFormAlignment(Qt.AlignmentFlag.AlignTop)
 
         self.api_key_edit = QLineEdit(self.provider_config.api_key)
         self.api_key_edit.setEchoMode(QLineEdit.EchoMode.Password)
@@ -290,9 +314,13 @@ class AISettingsDialog(QDialog):
         self._setup_ui()
 
     def _setup_ui(self):
-        layout = QVBoxLayout(self)
         self.setWindowTitle("AI 设置")
-        self.resize(600, 500)
+        self.resize(760, 620)
+        self.setMinimumSize(700, 560)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(10)
 
         # 当前提供商选择
         current_group = QGroupBox("当前AI提供商")
@@ -313,6 +341,8 @@ class AISettingsDialog(QDialog):
         # 现有提供商
         self.existing_tab = QWidget()
         existing_layout = QVBoxLayout(self.existing_tab)
+        existing_layout.setContentsMargins(12, 12, 12, 12)
+        existing_layout.setSpacing(10)
 
         self.provider_list_combo = QComboBox()
         self.provider_widget = None  # Initialize before refresh
@@ -322,13 +352,23 @@ class AISettingsDialog(QDialog):
         self.provider_list_combo.currentTextChanged.connect(self._on_provider_selected)
 
         existing_layout.addWidget(QLabel("配置:"))
-        self.config_container = QWidget()  # Initialize before refresh
-        existing_layout.addWidget(self.config_container)
+        self.config_scroll = QScrollArea()
+        self.config_scroll.setWidgetResizable(True)
+        self.config_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        self.config_scroll.setStyleSheet("QScrollArea { background: transparent; }")
+
+        self.config_container = QWidget()
+        self.config_layout = QVBoxLayout(self.config_container)
+        self.config_layout.setContentsMargins(0, 0, 0, 0)
+        self.config_layout.setSpacing(0)
+        self.config_scroll.setWidget(self.config_container)
+        existing_layout.addWidget(self.config_scroll, 1)
 
         self._refresh_provider_list()  # Call after UI elements are created
 
         # 保存按钮
         save_btn = QPushButton("保存更改")
+        save_btn.setFixedHeight(32)
         save_btn.clicked.connect(self._save_provider_config)
         existing_layout.addWidget(save_btn)
 
@@ -337,6 +377,8 @@ class AISettingsDialog(QDialog):
         # 添加新提供商
         self.new_tab = QWidget()
         new_layout = QVBoxLayout(self.new_tab)
+        new_layout.setContentsMargins(12, 12, 12, 12)
+        new_layout.setSpacing(10)
 
         new_layout.addWidget(QLabel("添加新的AI提供商:"))
 
@@ -401,16 +443,14 @@ class AISettingsDialog(QDialog):
         if provider_id:
             config = self.provider_manager.get_provider(provider_id)
             if config:
-                # 移除旧的widget
-                if self.provider_widget:
-                    self.config_container.layout().removeWidget(self.provider_widget)
-                    self.provider_widget.deleteLater()
+                while self.config_layout.count():
+                    item = self.config_layout.takeAt(0)
+                    if item.widget():
+                        item.widget().deleteLater()
 
-                # 添加新的widget
                 self.provider_widget = AIProviderWidget(config)
-                if self.config_container.layout() is None:
-                    self.config_container.setLayout(QVBoxLayout())
-                self.config_container.layout().addWidget(self.provider_widget)
+                self.config_layout.addWidget(self.provider_widget)
+                self.config_layout.addStretch()
 
     def _save_provider_config(self):
         """保存提供商配置"""

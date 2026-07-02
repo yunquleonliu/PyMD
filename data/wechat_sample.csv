@@ -1,0 +1,5 @@
+timestamp,sender,receiver,chat,content,media
+2026-04-01 09:12:00,Alice,Bob,Project Group,Hi Bob, how's the report?,
+2026-04-01 09:15:10,Bob,Alice,Project Group,All good — sending draft now,attachment1.pdf
+2026-04-02 14:05:00,Charlie,Alice,Private Chat,Can we meet tomorrow?,
+2026-04-02 14:10:00,Alice,Charlie,Private Chat,Sure, let's do 10am,

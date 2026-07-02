@@ -64,128 +64,100 @@ class ChatBubbleWidget(QFrame):
         super().__init__(parent)
         self.message = message
         self.avatar = avatar
+        self.content_label = None
         self._setup_ui()
 
     def _setup_ui(self):
         """设置气泡UI"""
         self.setFrameStyle(QFrame.Shape.NoFrame)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
+        self.setStyleSheet("ChatBubbleWidget { background: transparent; }")
 
-        # 主布局
+        is_user = self.message.message_type == MessageType.USER
+
         main_layout = QHBoxLayout(self)
         main_layout.setContentsMargins(8, 4, 8, 4)
-        main_layout.setSpacing(8)
+        main_layout.setSpacing(0)
 
-        # 根据消息类型设置布局方向
-        if self.message.message_type == MessageType.USER:
-            # 用户消息：头像在右边，气泡在左边
-            main_layout.addStretch()
-            self._create_bubble_content(main_layout)
-            self._create_avatar(main_layout)
+        if is_user:
+            main_layout.addStretch(1)
+            self._create_message_column(main_layout, is_user)
         else:
-            # AI消息：头像在左边，气泡在右边
-            self._create_avatar(main_layout)
-            self._create_bubble_content(main_layout)
-            main_layout.addStretch()
+            self._create_message_column(main_layout, is_user)
+            main_layout.addStretch(1)
 
-    def _create_avatar(self, layout: QHBoxLayout):
-        """创建头像"""
-        avatar_container = QWidget()
-        avatar_container.setFixedSize(36, 36)
-        avatar_container.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #e2e8f0, stop:1 #cbd5e0);
-                border-radius: 18px;
-                border: 2px solid #ffffff;
-            }
-        """)
+    def _create_message_column(self, layout: QHBoxLayout, is_user: bool):
+        """创建消息列（气泡 + 时间戳）"""
+        col = QWidget()
+        col.setMaximumWidth(320)
+        col_layout = QVBoxLayout(col)
+        col_layout.setContentsMargins(0, 0, 0, 0)
+        col_layout.setSpacing(3)
 
-        avatar_layout = QVBoxLayout(avatar_container)
-        avatar_layout.setContentsMargins(0, 0, 0, 0)
+        self.content_label = QLabel(self.message.content or "")
+        self.content_label.setWordWrap(True)
+        self.content_label.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse
+        )
+        self.content_label.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum
+        )
+        self.content_label.setContentsMargins(0, 0, 0, 0)
 
-        avatar_label = QLabel(self.avatar or "🤖")
-        avatar_label.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                background: transparent;
-                color: #4a5568;
-            }
-        """)
-        avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        avatar_layout.addWidget(avatar_label)
-
-        layout.addWidget(avatar_container)
-
-    def _create_bubble_content(self, layout: QHBoxLayout):
-        """创建气泡内容"""
-        # 气泡容器
-        bubble_container = QWidget()
-        bubble_layout = QVBoxLayout(bubble_container)
-        bubble_layout.setContentsMargins(0, 0, 0, 0)
-        bubble_layout.setSpacing(0)
-
-        # 消息内容
-        content_label = QLabel(self.message.content)
-        content_label.setWordWrap(True)
-        content_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        content_label.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum)
-
-        bubble_layout.addWidget(content_label)
-
-        # 设置气泡样式
-        self._set_bubble_style(bubble_container, self.message.message_type)
-
-        layout.addWidget(bubble_container)
-
-    def _set_bubble_style(self, bubble: QWidget, message_type: str):
-        """设置气泡样式"""
-        if message_type == MessageType.USER:
-            # 用户消息样式（现代蓝色渐变，无边框）
-            bubble.setStyleSheet("""
-                QWidget {
-                    background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                        stop:0 #667eea, stop:1 #764ba2);
-                    border-radius: 18px;
-                    padding: 12px 16px;
-                    margin: 4px 12px 4px 40px;
-                    max-width: 320px;
-                }
+        if is_user:
+            self.content_label.setStyleSheet("""
                 QLabel {
-                    color: white;
+                    background-color: #e8f0fe;
+                    border: 1px solid #d7e3fc;
+                    border-radius: 8px;
+                    color: #1f2937;
                     font-size: 13px;
-                    line-height: 1.4;
+                    line-height: 1.5;
+                    padding: 9px 13px;
                 }
             """)
         else:
-            # AI消息样式（现代白色，无边框，通过背景对比创建边界）
-            bubble.setStyleSheet("""
-                QWidget {
-                    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                        stop:0 #ffffff, stop:1 #f8f9fa);
-                    border-radius: 20px;
-                    padding: 12px 16px;
-                    margin: 4px 40px 4px 12px;
-                    max-width: 320px;
-                }
+            self.content_label.setStyleSheet("""
                 QLabel {
-                    color: #2d3748;
+                    background-color: #ffffff;
+                    border: 1px solid #d1d5db;
+                    border-radius: 8px;
+                    color: #1f2937;
                     font-size: 13px;
-                    line-height: 1.4;
+                    line-height: 1.5;
+                    padding: 9px 13px;
                 }
             """)
+
+        col_layout.addWidget(self.content_label)
+
+        # 时间戳
+        ts_label = QLabel(self._format_timestamp())
+        ts_label.setStyleSheet("color: #9ca3af; font-size: 10px; padding: 0 2px;")
+        ts_label.setAlignment(
+            Qt.AlignmentFlag.AlignRight if is_user else Qt.AlignmentFlag.AlignLeft
+        )
+        col_layout.addWidget(ts_label)
+
+        layout.addWidget(col)
+
+    def update_content(self, new_text: str):
+        """更新气泡的文本内容（用于流式追加/覆盖）"""
+        try:
+            self.message.content = new_text
+            if self.content_label is not None:
+                self.content_label.setText(new_text)
+        except Exception:
+            pass
 
     def _format_timestamp(self) -> str:
         """格式化时间戳"""
         now = datetime.now()
         if self.message.timestamp.date() == now.date():
-            # 今天的消息只显示时间
             return self.message.timestamp.strftime("%H:%M")
         elif self.message.timestamp.year == now.year:
-            # 今年内的消息显示月日时间
             return self.message.timestamp.strftime("%m-%d %H:%M")
         else:
-            # 更早的消息显示完整日期时间
             return self.message.timestamp.strftime("%Y-%m-%d %H:%M")
 
 
@@ -196,117 +168,68 @@ class TypingIndicatorWidget(QWidget):
         super().__init__(parent)
         self.avatar = avatar
         self.dots = []
-        self.animation_timers = []
+        self._timer = None
+        self._tick = 0
         self._setup_ui()
         self._start_animation()
 
     def _setup_ui(self):
         """设置UI"""
-        self.setFixedHeight(50)
+        self.setFixedHeight(46)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        self.setStyleSheet("TypingIndicatorWidget { background: transparent; }")
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 8, 16, 8)
-        layout.setSpacing(12)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(0)
 
-        # 头像
-        avatar_container = QWidget()
-        avatar_container.setFixedSize(36, 36)
-        avatar_container.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #e2e8f0, stop:1 #cbd5e0);
-                border-radius: 18px;
-                border: 2px solid #ffffff;
+        bubble = QFrame()
+        bubble.setFrameStyle(QFrame.Shape.NoFrame)
+        bubble.setStyleSheet("""
+            QFrame {
+                background-color: #ffffff;
+                border: 1px solid #d1d5db;
+                border-radius: 8px;
             }
         """)
+        bubble_layout = QHBoxLayout(bubble)
+        bubble_layout.setContentsMargins(12, 8, 12, 8)
+        bubble_layout.setSpacing(6)
 
-        avatar_layout = QVBoxLayout(avatar_container)
-        avatar_layout.setContentsMargins(0, 0, 0, 0)
+        typing_label = QLabel("Thinking")
+        typing_label.setStyleSheet("color: #6b7280; font-size: 12px; background: transparent;")
+        bubble_layout.addWidget(typing_label)
 
-        avatar_label = QLabel(self.avatar)
-        avatar_label.setStyleSheet("""
-            QLabel {
-                font-size: 16px;
-                background: transparent;
-                color: #4a5568;
-            }
-        """)
-        avatar_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        avatar_layout.addWidget(avatar_label)
-
-        layout.addWidget(avatar_container)
-
-        # 打字指示器容器
-        indicator_container = QWidget()
-        indicator_container.setStyleSheet("""
-            QWidget {
-                background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-                    stop:0 #ffffff, stop:1 #f8f9fa);
-                border-radius: 16px;
-                padding: 8px 12px;
-                border: 1px solid #e9ecef;
-            }
-        """)
-
-        indicator_layout = QHBoxLayout(indicator_container)
-        indicator_layout.setContentsMargins(8, 4, 8, 4)
-        indicator_layout.setSpacing(4)
-
-        # "Typing..." 文本
-        typing_label = QLabel("Typing")
-        typing_label.setStyleSheet("""
-            QLabel {
-                color: #718096;
-                font-size: 12px;
-                font-weight: 500;
-            }
-        """)
-        indicator_layout.addWidget(typing_label)
-
-        # 创建三个点
-        for i in range(3):
+        for _ in range(3):
             dot = QLabel("●")
-            dot.setStyleSheet("""
-                QLabel {
-                    color: #a0aec0;
-                    font-size: 8px;
-                }
-            """)
-            dot.setFixedSize(6, 6)
+            dot.setStyleSheet("QLabel { color: #9ca3af; font-size: 10px; background: transparent; }")
             self.dots.append(dot)
-            indicator_layout.addWidget(dot)
+            bubble_layout.addWidget(dot)
 
-        layout.addWidget(indicator_container)
+        layout.addWidget(bubble)
         layout.addStretch()
 
     def _start_animation(self):
-        """开始动画"""
+        """启动波浪点动画（单一定时器）"""
+        self._timer = QTimer(self)
+        self._timer.timeout.connect(self._tick_wave)
+        self._timer.start(320)
+
+    def _tick_wave(self):
+        """每帧更新一个活跃点的颜色"""
+        self._tick += 1
+        active = self._tick % 3
         for i, dot in enumerate(self.dots):
-            timer = QTimer(self)
-            timer.timeout.connect(lambda idx=i: self._animate_dot(idx))
-            timer.start(500 + i * 200)  # 交错开始
-            self.animation_timers.append(timer)
-
-    def _animate_dot(self, index: int):
-        """动画单个点"""
-        dot = self.dots[index]
-        current_opacity = dot.property("opacity") or 1.0
-
-        if current_opacity < 0.3:
-            new_opacity = 1.0
-        else:
-            new_opacity = current_opacity - 0.3
-
-        dot.setProperty("opacity", new_opacity)
-        # 强制重绘
-        dot.update()
+            color = "#4b5563" if i == active else "#d1d5db"
+            dot.setStyleSheet(
+                f"QLabel {{ color: {color}; font-size: 10px; background: transparent; }}"
+            )
 
     def stop_animation(self):
         """停止动画"""
-        for timer in self.animation_timers:
-            timer.stop()
-        self.animation_timers.clear()
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
 
     def hide(self):
         """隐藏时停止动画"""
@@ -334,20 +257,20 @@ class ChatHistoryWidget(QScrollArea):
         self.setStyleSheet("""
             QScrollArea {
                 border: none;
-                background-color: #f5f7fa;
+                background-color: #ffffff;
             }
             QScrollBar:vertical {
-                width: 6px;
+                width: 5px;
                 background-color: transparent;
                 margin: 0;
             }
             QScrollBar::handle:vertical {
-                background-color: #cbd5e0;
-                border-radius: 3px;
-                min-height: 30px;
+                background-color: #d1d5db;
+                border-radius: 2px;
+                min-height: 24px;
             }
             QScrollBar::handle:vertical:hover {
-                background-color: #a0aec0;
+                background-color: #9ca3af;
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
                 border: none;
@@ -360,15 +283,11 @@ class ChatHistoryWidget(QScrollArea):
 
         # 创建内容容器
         self.content_widget = QWidget()
-        self.content_widget.setStyleSheet("""
-            QWidget {
-                background-color: transparent;
-            }
-        """)
+        self.content_widget.setStyleSheet("QWidget { background-color: transparent; }")
         self.content_layout = QVBoxLayout(self.content_widget)
-        self.content_layout.setContentsMargins(8, 12, 8, 12)
-        self.content_layout.setSpacing(12)
-        self.content_layout.addStretch()  # 添加底部伸缩空间
+        self.content_layout.setContentsMargins(6, 10, 6, 10)
+        self.content_layout.setSpacing(6)
+        self.content_layout.addStretch()
 
         self.setWidget(self.content_widget)
 
@@ -387,8 +306,33 @@ class ChatHistoryWidget(QScrollArea):
         bubble = ChatBubbleWidget(message, avatar)
         self.content_layout.insertWidget(self.content_layout.count() - 1, bubble)
 
-        # 发送信号
-        self.message_added.emit(message)
+    def update_last_message_append(self, chunk: str):
+        """将流式片段追加到最后一条消息（如果最后一条是 AI 消息）。"""
+        try:
+            if not self.messages:
+                return
+            last = self.messages[-1]
+            if last.message_type != MessageType.AI:
+                return
+            # 累加文本
+            last.content = (last.content or "") + chunk
+
+            # 更新最后一个气泡组件的显示
+            # 最后一个 widget 在 content_layout 中靠近末尾（倒数第二个）
+            idx = self.content_layout.count() - 2
+            if idx >= 0:
+                item = self.content_layout.itemAt(idx)
+                if item and item.widget():
+                    widget = item.widget()
+                    if hasattr(widget, 'update_content'):
+                        widget.update_content(last.content)
+
+            # 保存历史
+            self._save_conversation_history()
+        except Exception:
+            pass
+
+        self.message_added.emit(last)
 
         # 自动滚动到底部
         QTimer.singleShot(100, self._scroll_to_bottom)
@@ -494,74 +438,64 @@ class ChatInputWidget(QWidget):
 
     def _setup_ui(self):
         """设置UI"""
-        self.setFixedHeight(70)
+        self.setFixedHeight(68)
         self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.setStyleSheet("""
-            QWidget {
+            ChatInputWidget {
                 background-color: #ffffff;
-                border-top: 1px solid #e9ecef;
+                border-top: 1px solid #d1d5db;
             }
         """)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(16, 12, 16, 12)
-        layout.setSpacing(12)
+        layout.setContentsMargins(10, 8, 10, 8)
+        layout.setSpacing(8)
 
         # 输入框
         self.input_edit = QTextEdit()
-        self.input_edit.setPlaceholderText("Type your message...")
-        self.input_edit.setMaximumHeight(46)
+        self.input_edit.setPlaceholderText("Ask AI anything...")
+        self.input_edit.setMaximumHeight(50)
         self.input_edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.input_edit.setStyleSheet("""
             QTextEdit {
-                border: 2px solid #e2e8f0;
-                border-radius: 12px;
-                background-color: #f8f9fa;
-                font-family: 'Segoe UI', -apple-system, sans-serif;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                background-color: #ffffff;
                 font-size: 13px;
-                padding: 10px 14px;
-                color: #2d3748;
-                selection-background-color: #667eea;
+                padding: 6px 10px;
+                color: #111827;
+                selection-background-color: #c7d2fe;
             }
             QTextEdit:focus {
-                border-color: #667eea;
-                background-color: #ffffff;
-            }
-            QTextEdit::placeholder {
-                color: #a0aec0;
+                border-color: #9ca3af;
             }
         """)
         self.input_edit.textChanged.connect(self._on_text_changed)
-        self.input_edit.installEventFilter(self)  # 安装事件过滤器
+        self.input_edit.installEventFilter(self)
         layout.addWidget(self.input_edit)
 
-        # 发送按钮
-        self.send_button = QPushButton("📤")
-        self.send_button.setToolTip("Send message (Enter)")
-        self.send_button.setFixedSize(44, 44)
+        self.send_button = QPushButton("Send")
+        self.send_button.setToolTip("Send (Enter)")
+        self.send_button.setFixedSize(56, 36)
         self.send_button.setEnabled(False)
         self.send_button.setStyleSheet("""
             QPushButton {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #667eea, stop:1 #764ba2);
-                color: white;
-                border: none;
-                border-radius: 12px;
-                font-size: 16px;
+                background-color: #f3f4f6;
+                color: #111827;
+                border: 1px solid #d1d5db;
+                border-radius: 6px;
+                font-size: 12px;
                 font-weight: 600;
             }
             QPushButton:hover {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #5a67d8, stop:1 #6b46c1);
+                background-color: #e5e7eb;
             }
             QPushButton:pressed {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #4c51bf, stop:1 #553c9a);
+                background-color: #d1d5db;
             }
             QPushButton:disabled {
-                background: qlineargradient(x1:0, y1:0, x2:1, y2:1,
-                    stop:0 #cbd5e0, stop:1 #a0aec0);
-                color: #718096;
+                background-color: #f9fafb;
+                color: #9ca3af;
             }
         """)
         self.send_button.clicked.connect(self._on_send_clicked)

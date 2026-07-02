@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PyMD Muse Concept</title>
+    <style>
+        :root {
+            --bg-color: #fdfbf7;
+            --text-color: #2c2c2c;
+            --accent-color: #8e44ad;
+            --sidebar-bg: #f4f1ea;
+        }
+        body {
+            font-family: 'Georgia', serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            margin: 0;
+            display: flex;
+            height: 100vh;
+        }
+        .editor {
+            flex: 1;
+            padding: 40px 80px;
+            font-size: 18px;
+            line-height: 1.8;
+            outline: none;
+            overflow-y: auto;
+        }
+        .muse-sidebar {
+            width: 300px;
+            background-color: var(--sidebar-bg);
+            padding: 20px;
+            border-left: 1px solid #e0e0e0;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            font-family: 'Inter', sans-serif;
+        }
+        .muse-header {
+            font-size: 14px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #888;
+            font-weight: bold;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .muse-card {
+            background: white;
+            padding: 15px;
+            border-radius: 12px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
+            cursor: pointer;
+        }
+        .muse-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0,0,0,0.08);
+        }
+        .muse-card h3 {
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            color: var(--accent-color);
+        }
+        .muse-card p {
+            margin: 0;
+            font-size: 13px;
+            color: #666;
+        }
+        .style-options {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .style-tag {
+            background: #f0f0f0;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            color: #555;
+        }
+        .visualizer-preview {
+            width: 100%;
+            height: 120px;
+            background: linear-gradient(45deg, #ff9a9e 0%, #fad0c4 99%, #fad0c4 100%);
+            border-radius: 8px;
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+        h1 { font-family: 'Inter', sans-serif; font-weight: 300; margin-bottom: 30px; }
+    </style>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="editor" contenteditable="true">
+        <h1>The Old House</h1>
+        <p>The house stood on a slight rise just on the edge of the village. It stood on its own and looked over a broad spread of West Country farmland. Not a remarkable house by any means—it was about thirty years old, squattish, squarish, made of brick, and had four windows set in the front of a size and proportion which gave it an unpleasant expression.</p>
+        <p>It was the kind of house that seemed to be watching you, waiting for you to make a mistake.</p>
+    </div>
+    
+    <div class="muse-sidebar">
+        <div class="muse-header">✨ The Muse</div>
+        
+        <div class="muse-card">
+            <h3>Style Transfer</h3>
+            <p>Rewrite selection as:</p>
+            <div class="style-options">
+                <span class="style-tag">Hemingway</span>
+                <span class="style-tag">Poetic</span>
+                <span class="style-tag">Noir</span>
+            </div>
+        </div>
+
+        <div class="muse-card">
+            <h3>Visualizer</h3>
+            <p>Generating context image...</p>
+            <div class="visualizer-preview">
+                [AI Generated Image of a spooky brick house on a hill]
+            </div>
+        </div>
+
+        <div class="muse-card">
+            <h3>Inspire Me</h3>
+            <p>What happens next?</p>
+            <ul style="padding-left: 20px; margin: 10px 0; font-size: 13px; color: #555;">
+                <li>The front door creaks open on its own.</li>
+                <li>A sudden storm rolls in over the farmland.</li>
+                <li>You notice a light in the attic window.</li>
+            </ul>
+        </div>
+    </div>
+</body>
+</html>
