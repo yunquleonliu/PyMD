@@ -1,122 +1,75 @@
-﻿# PyMD Editor
+﻿# PyMD
 
-A simple Windows Markdown editor with live preview and multi-format export. Built with Python + PyQt6.
+PyMD is a **local-first** document workspace for Markdown editing and multi-format conversion. Run everything on your own machine, or deploy it as a personal server to use as a shared File/DataHub across devices or with a small team.
 
-## ✨ Features
+## Phase 1 Features
 
-### Implemented (MVP)
-- ✅ **Live editing & preview**: Left editor + right real-time HTML preview
-- ✅ **File management**: New, Open, Save, Save As `.md`
-- ✅ **Theme switching**: Light/Dark mode (Ctrl+T)
-- ✅ **Export to Word**: Export as `.docx` (Ctrl+Shift+W)
-- ✅ **Export to PDF**: Export as PDF (Ctrl+Shift+P, requires weasyprint)
-- ✅ **Markdown extensions**: Code blocks, tables, task lists, etc.
+- **Markdown editing** — live split-pane preview, WYSIWYG mode, dark/light theme
+- **PDF conversion** — PDF → Markdown / Word / Excel / PowerPoint (backend-powered)
+- **Markdown export** — Markdown → Word / PDF
+- **File browser** — browse and manage `.md` and `.pdf` folders
+- **PDF tools** — preview, merge, split, extract pages
+- **AI assistant** — optional chat panel for writing assistance
 
-### Coming soon
-- ⏳ Syntax highlighting editor
-- ⏳ Custom export styles
-- ⏳ User preferences persistence
-- ⏳ Plugin system
+## Quick Start
 
-## 🚀 Quick Start
+### Local mode (default)
 
-### Method 1: Use the launch script (recommended)
-
-Double-click to run:
-```
-run_editor.bat       (Batch)
-run_editor.ps1       (PowerShell)
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+pip install -r requirements.txt
+pip install -e .
+python -m pymd_editor.server.serve --dir data --host 127.0.0.1 --port 8765 --no-browser
 ```
 
-### Method 2: Command line launch
+Open `http://127.0.0.1:8765`.
 
-```powershell
-Set-Location -LiteralPath "C:\Users\Leon Liu\Desktop\微观社会经济\src"
-& "C:\Users\Leon Liu\Desktop\微观社会经济\.venv\Scripts\python.exe" -m pymd_editor.main
+### Personal server / File DataHub
+
+Run the backend on any machine you control. Connect from other devices or share a document folder with a small team.
+
+```bash
+# On your server
+python -m pymd_editor.server.serve --dir /path/to/docs --host 0.0.0.0 --port 8765
 ```
 
-## 📦 Dependencies
+### Windows desktop app
 
-All dependencies are installed in the `.venv` virtual environment:
-
-Core dependencies (already installed):
-- PyQt6 - GUI framework
-- PyQt6-WebEngine - HTML preview engine
-- markdown2 - Markdown to HTML
-- python-docx - Word document generation
-
-Optional (PDF export):
-```powershell
-& ".venv\Scripts\pip.exe" install weasyprint
+```
+run_editor.bat
 ```
 
-> **Note**: On Windows, weasyprint may require GTK3 runtime. If issues occur, Word export remains available.
+Build a standalone EXE:
 
-## ⌨️ Shortcuts
+```bash
+pyinstaller build_exe.spec --noconfirm
+```
 
-| Feature | Shortcut |
-|---------|----------|
-| New     | Ctrl+N   |
-| Open    | Ctrl+O   |
-| Save    | Ctrl+S   |
+### Docker
+
+```bash
+docker compose up --build
+```
+
+## Keyboard Shortcuts (desktop app)
+
+| Action | Shortcut |
+|--------|----------|
+| New | Ctrl+N |
+| Open | Ctrl+O |
+| Save | Ctrl+S |
 | Save As | Ctrl+Shift+S |
-| Export PDF | Ctrl+Shift+P |
 | Export Word | Ctrl+Shift+W |
+| Export PDF | Ctrl+Shift+P |
 | Toggle Theme | Ctrl+T |
 
-## 📁 Project Structure
+## Key Docs
 
-```
-微观社会经济/
-├── .venv/                      # Python virtual environment
-├── src/
-│   └── pymd_editor/
-│       ├── __init__.py         # Package init
-│       ├── main.py             # Entry point
-│       ├── app.py              # Main window & UI logic
-│       ├── renderer.py         # Markdown → HTML renderer
-│       └── exporter.py         # PDF/Word exporter
-├── requirements.txt            # Dependency list
-├── run_editor.bat              # Windows batch launch script
-├── run_editor.ps1              # PowerShell launch script
-└── README_en.md                # This document
-```
+- [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md)
+- [ARCHITECTURE_v2.0.md](ARCHITECTURE_v2.0.md)
+- [AI_USAGE_GUIDE.md](AI_USAGE_GUIDE.md)
 
-## 🛠️ Development Notes
+## License
 
-This project is open source under the MIT license:
-- ✅ Free to use, no upfront payment
-- ✅ Source code is public
-- ✅ Free to modify and distribute
-- 💡 Future server-side features (like cloud sync) will be paid services only
-
-### Adding new features
-
-The project is modular and easy to extend:
-- `renderer.py` - Change rendering style or add Markdown extensions
-- `exporter.py` - Add new export formats
-- `app.py` - Add UI features or toolbar buttons
-
-### Running tests
-
-```powershell
-# Install dev dependencies
-& ".venv\Scripts\pip.exe" install pytest
-
-# Run tests (to be added)
-& ".venv\Scripts\python.exe" -m pytest
-```
-
-## 📄 License
-
-MIT License - see LICENSE file
-
-## 🤝 Contributing
-
-Issues and Pull Requests welcome!
-
----
-
-**Dev tools**: Python 3.13 + PyQt6  
-**Target platform**: Windows 10/11  
-**Dev date**: October 2025
+MIT

@@ -1,19 +1,102 @@
-﻿# 📘 PyMD Editor - 完整用户手册
-
-## 🎯 两个核心问题的答案
+﻿# PyMD 用户手册 / User Guide
 
 ---
 
-## ❓ 问题 1: 如何让 .md 文件关联到编辑器？
+## 启动 / Getting Started
 
-### ✅ 最佳答案：拖拽打开（零配置）
+### 本地模式 / Local mode
 
-**操作步骤**：
+```bash
+pip install -r requirements.txt
+pip install -e .
+python -m pymd_editor.server.serve --dir data --host 127.0.0.1 --port 8765 --no-browser
 ```
-1. 右键 run_editor.bat → 发送到 → 桌面快捷方式
-2. 拖拽任意 .md 文件到桌面快捷方式图标
-3. 松开鼠标，编辑器自动打开该文件
+
+打开 `http://127.0.0.1:8765`。 / Open `http://127.0.0.1:8765`.
+
+### 个人服务器 / Personal server (File DataHub)
+
+```bash
+python -m pymd_editor.server.serve --dir /path/to/docs --host 0.0.0.0 --port 8765
 ```
+
+从其他设备访问 `http://<服务器IP>:8765`。 / Connect from any device at `http://<server-ip>:8765`.
+
+### Windows 桌面应用 / Windows desktop app
+
+```
+run_editor.bat
+```
+
+---
+
+## 核心功能 / Core Features
+
+### Markdown 编辑 / Markdown Editing
+
+- 左栏编辑，右栏实时预览 / Left pane editor, right pane live preview
+- 支持 WYSIWYG 模式 / WYSIWYG mode supported
+- 深色/浅色主题切换（桌面：`Ctrl+T`）/ Dark/light theme (`Ctrl+T` on desktop)
+
+### 文档转换 / Document Conversion
+
+| 转换 / Conversion | 说明 / Notes |
+|---|---|
+| PDF → Word / Excel / PPT | 需后端 / Requires backend |
+| PDF → Markdown | 需后端 / Requires backend |
+| Markdown → Word | 需后端 / Requires backend |
+| Markdown → PDF | 需后端 / Requires backend |
+
+在 Web UI 工具栏选择文件后点击对应导出按钮。  
+Use the toolbar export buttons after selecting a file in the Web UI.
+
+### 文件浏览 / File Browser
+
+左侧面板浏览 `.md` 和 `.pdf` 文件夹。  
+Browse `.md` and `.pdf` files in the left sidebar.
+
+### PDF 工具 / PDF Tools
+
+预览、合并、拆分、提取页面——通过 PDF 工具栏操作。  
+Preview, merge, split, extract pages — via the PDF toolbar.
+
+### AI 助手 / AI Assistant
+
+右侧 AI 面板可用于写作辅助（需配置 AI 后端）。  
+Right-side AI panel for writing assistance (requires AI backend configuration).  
+详见 [AI_USAGE_GUIDE.md](AI_USAGE_GUIDE.md).
+
+---
+
+## 快捷键（桌面应用）/ Shortcuts (desktop app)
+
+| 功能 / Action | 快捷键 / Shortcut |
+|---|---|
+| 新建 / New | `Ctrl+N` |
+| 打开 / Open | `Ctrl+O` |
+| 保存 / Save | `Ctrl+S` |
+| 另存为 / Save As | `Ctrl+Shift+S` |
+| 导出 Word / Export Word | `Ctrl+Shift+W` |
+| 导出 PDF / Export PDF | `Ctrl+Shift+P` |
+| 切换主题 / Toggle Theme | `Ctrl+T` |
+
+---
+
+## 后端选择器 / Backend Selector
+
+Web UI 工具栏可切换后端：  
+Switch backend in the Web UI toolbar:
+
+| 模式 / Mode | 目标 / Target |
+|---|---|
+| Auto | 同源 → localhost → 纯浏览器 / Same-origin → localhost → browser-only |
+| Localhost | `http://127.0.0.1:8765` |
+| Custom server | 你的服务器地址 / Your server URL |
+| Demo / Lite | 纯浏览器，无需后端 / Browser-only, no backend |
+
+---
+
+详见 [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md) · [AI_USAGE_GUIDE.md](AI_USAGE_GUIDE.md) · [README.md](README.md)
 
 **为什么推荐**：
 - ✅ 零配置（不需要任何设置）

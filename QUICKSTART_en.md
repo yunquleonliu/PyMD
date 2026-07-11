@@ -1,55 +1,59 @@
-﻿# 🚀 PyMD Editor Quick Start Guide
+﻿# PyMD Quick Start
 
-## Get started instantly! (3 methods)
+## Option 1: Web server mode (recommended)
 
-### 🥇 Method 1: Drag & Drop (zero setup, easiest!)
+Start the local server and open in a browser:
 
-**One-time setup (30 seconds):**
-```
-1. Right-click run_editor.bat
-2. Send to → Desktop shortcut
-3. (Optional) Rename shortcut to "PyMD Editor"
-```
-
-**Every time you use:**
-```
-Drag any .md file onto the desktop shortcut icon → Editor opens the file automatically
+```bash
+pip install -r requirements.txt
+pip install -e .
+python -m pymd_editor.server.serve --dir data --host 127.0.0.1 --port 8765 --no-browser
 ```
 
-✅ **Benefits**: No setup, no permissions required
+Open `http://127.0.0.1:8765`.
 
----
+### Personal server / File DataHub
 
-### 🥈 Method 2: Double-click to run
+Run on your own server for multi-device access:
 
-**Directly launch the editor:**
-```
-Double-click: run_editor.bat
-```
-
-Then use `Ctrl+O` in the editor to open files.
-
----
-
-### 🥉 Method 3: Right-click association (one-time setup)
-
-**Setup steps:**
-```
-1. Right-click any .md file
-2. Open with → Choose another app
-3. Browse and select run_editor.bat
-4. ☑️ Check "Always use this app to open .md files"
-5. Confirm
-```
-
-**After setup:**
-```
-Double-click any .md file → Automatically opens in PyMD Editor
+```bash
+python -m pymd_editor.server.serve --dir /path/to/docs --host 0.0.0.0 --port 8765
 ```
 
 ---
 
-## First time use?
-- Try opening EXAMPLE.md for a feature demo
-- Test export to Word/PDF
-- Try theme switching (Ctrl+T)
+## Option 2: Windows desktop app
+
+Double-click to launch (no browser needed):
+
+```
+run_editor.bat
+```
+
+Drag any `.md` file onto the desktop shortcut to open it directly.
+
+---
+
+## Option 3: Docker
+
+```bash
+docker compose up --build
+```
+
+---
+
+## Keyboard shortcuts (desktop app)
+
+| Action | Shortcut |
+|--------|----------|
+| New | Ctrl+N |
+| Open | Ctrl+O |
+| Save | Ctrl+S |
+| Save As | Ctrl+Shift+S |
+| Export Word | Ctrl+Shift+W |
+| Export PDF | Ctrl+Shift+P |
+| Toggle Theme | Ctrl+T |
+
+---
+
+See [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md) for full deployment details.

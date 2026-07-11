@@ -389,8 +389,14 @@ class LocalFsBackend {
 
 let backend = null;
 let backendMode = 'none';
+let localFsBridge = null;
 
 async function detectBackend() {
+  if (typeof window.showDirectoryPicker === 'function' && !localFsBridge) {
+    localFsBridge = new LocalFsBackend();
+    document.getElementById('btn-open-folder').classList.remove('hidden');
+  }
+
   for (const baseUrl of getPreferredApiCandidates()) {
     try {
       const ctrl = new AbortController();
@@ -415,12 +421,11 @@ async function detectBackend() {
 
   // 2. File System Access API (Phase 3 PWA / standalone)
   if (typeof window.showDirectoryPicker === 'function') {
-    backend     = new LocalFsBackend();
+    backend     = localFsBridge || new LocalFsBackend();
     backendMode = 'local';
     apiBaseUrl = '';
     backendInfo = null;
     _updateModeBadge('📁 File System');
-    document.getElementById('btn-open-folder').classList.remove('hidden');
     showStatus('Standalone mode — click 📂 Open Folder to browse files');
     return;
   }
@@ -446,10 +451,19 @@ const state = {
   dirty:       false,
   dark:        false,
   treeDir:     '',
+  fileSource:  'backend',  // backend | localfs
   renderTimer: null,
   statusTimer: null,
   viewMode:    'split',    // split | source | preview | wysiwyg | pdf
 };
+
+function usingLocalFiles() {
+  return state.fileSource === 'localfs' && !!localFsBridge?.dirHandle;
+}
+
+function activeFileBackend() {
+  return usingLocalFiles() ? localFsBridge : backend;
+}
 
 // ── DOM refs ──────────────────────────────────────────────────────────────────
 
@@ -558,7 +572,8 @@ function updateWordCount() {
 // ── Preview rendering ─────────────────────────────────────────────────────────
 
 async function renderPreview() {
-  if (!backend) return;
+  const fileBackend = activeFileBackend();
+  if (!fileBackend) return;
   if (state.viewMode === 'wysiwyg') { _syncWysiwygFromState(); return; }
   if (state.viewMode === 'pdf')     { return; }
 
@@ -569,7 +584,8 @@ async function renderPreview() {
     const basePath = state.currentPath
       ? state.currentPath.split('/').slice(0, -1).join('/') || null
       : null;
-    const html = await backend.render(state.content, state.dark, basePath);
+    const renderer = usingLocalFiles() ? localFsBridge : backend;
+    const html = await renderer.render(state.content, state.dark, usingLocalFiles() ? null : basePath);
     elPreview.srcdoc = html;
     elPreview.addEventListener('load', () => {
       elPreview.contentWindow?.scrollTo(0, savedY);
@@ -582,10 +598,11 @@ async function renderPreview() {
 // ── File tree ─────────────────────────────────────────────────────────────────
 
 async function loadFileTree(dir = '') {
-  if (!backend || backendMode === 'none') return;
+  const fileBackend = activeFileBackend();
+  if (!fileBackend || backendMode === 'none') return;
   state.treeDir = dir;
   try {
-    const { files, dir: currentDir } = await backend.listFiles(dir);
+    const { files, dir: currentDir } = await fileBackend.listFiles(dir);
     renderFileTree(files, currentDir);
   } catch (err) {
     console.error('[pymd] file tree error:', err);
@@ -636,10 +653,11 @@ function makeTreeItem(label, path, isDir) {
 // ── File open / save / new ────────────────────────────────────────────────────
 
 async function openFile(path) {
-  if (!backend) return;
+  const fileBackend = activeFileBackend();
+  if (!fileBackend) return;
   if (state.dirty && !confirmDiscard()) return;
   try {
-    const { content, path: filePath, name } = await backend.readFile(path);
+    const { content, path: filePath, name } = await fileBackend.readFile(path);
     state.currentPath = filePath;
     state.content     = content;
     elEditor.value    = content;
@@ -668,7 +686,8 @@ async function newFile() {
 }
 
 async function saveFile() {
-  if (!backend || backendMode === 'none') {
+  const fileBackend = activeFileBackend();
+  if (!fileBackend || backendMode === 'none') {
     showStatus('No backend — run  pymd serve  to save files', true);
     return;
   }
@@ -678,7 +697,7 @@ async function saveFile() {
 
 async function doSave(path) {
   try {
-    const { path: savedPath } = await backend.writeFile(path, state.content);
+    const { path: savedPath } = await activeFileBackend().writeFile(path, state.content);
     state.currentPath = savedPath;
     elFilename.textContent = savedPath.split('/').pop();
     setDirty(false);
@@ -694,11 +713,12 @@ async function doSave(path) {
 // ── Folder picker (Phase 3 standalone) ───────────────────────────────────────
 
 async function openFolder() {
-  if (backendMode !== 'local') return;
+  if (!localFsBridge) return;
   try {
-    await backend.openFolder();
+    await localFsBridge.openFolder();
+    state.fileSource = 'localfs';
     await loadFileTree('');
-    showStatus('Folder opened: ' + backend.dirHandle.name);
+    showStatus('Folder opened: ' + localFsBridge.dirHandle.name + (backendMode === 'api' ? ` using ${getBackendDescription()}` : ''));
   } catch (err) {
     if (err.name !== 'AbortError') {
       showStatus('Could not open folder', true);
@@ -1229,11 +1249,12 @@ window.renderFileTree = function(files, currentDir) {
 // Patch loadFileTree to use types=md,pdf
 const _origLoadFileTree = loadFileTree;
 window.loadFileTree = async function(dir = '') {
-  if (!backend || backendMode === 'none') return;
+  const fileBackend = activeFileBackend();
+  if (!fileBackend || backendMode === 'none') return;
   state.treeDir = dir;
   try {
-    if (backendMode === 'local') {
-      const { files, dir: currentDir } = await backend.listFiles(dir);
+    if (usingLocalFiles()) {
+      const { files, dir: currentDir } = await localFsBridge.listFiles(dir);
       window.renderFileTree(files, currentDir);
       return;
     }
@@ -1321,7 +1342,7 @@ async function reinitializeBackend() {
   backendMode = 'none';
   apiBaseUrl = '';
   backendInfo = null;
-  document.getElementById('btn-open-folder').classList.add('hidden');
+  state.fileSource = 'backend';
   document.getElementById('file-tree').innerHTML = '';
   await detectBackend();
   if (backendMode === 'api') {
@@ -1335,7 +1356,7 @@ async function reinitializeBackend() {
 
 function syncPdfPathDisplays(path) {
   const name = path ? path.split('/').pop() : '—';
-  const ids  = ['pdf-toword-path','pdf-toexcel-path','pdf-insert-base'];
+  const ids  = ['pdf-toword-path','pdf-toexcel-path','pdf-toppt-path','pdf-insert-base'];
   ids.forEach(id => {
     const el = document.getElementById(id);
     if (el) el.textContent = name || '—';
@@ -1395,6 +1416,7 @@ function setupPdfModal() {
   // To Word / Excel
   document.getElementById('btn-pdf-toword').addEventListener('click',  pdfToWord);
   document.getElementById('btn-pdf-toexcel').addEventListener('click', pdfToExcel);
+  document.getElementById('btn-pdf-toppt').addEventListener('click', pdfToPpt);
 }
 
 // ── Merge list helpers ────────────────────────────────────────────────────────
@@ -1456,6 +1478,10 @@ async function pdfInsert() {
 
 async function pdfToWord() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
+  if (usingLocalFiles() && backendMode === 'api') {
+    await uploadLocalPdfToApi('/api/pdf/upload/to-word', pdfActivePath, '.docx');
+    return;
+  }
   if (backendMode === 'local') {
     await localPdfToWord(pdfActivePath);
     return;
@@ -1465,11 +1491,28 @@ async function pdfToWord() {
 
 async function pdfToExcel() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
+  if (usingLocalFiles() && backendMode === 'api') {
+    await uploadLocalPdfToApi('/api/pdf/upload/to-excel', pdfActivePath, '.xlsx');
+    return;
+  }
   if (backendMode === 'local') {
     await localPdfToExcel(pdfActivePath);
     return;
   }
   await _pdfApiDownload('/api/pdf/to-excel', { path: pdfActivePath });
+}
+
+async function pdfToPpt() {
+  if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
+  if (usingLocalFiles() && backendMode === 'api') {
+    await uploadLocalPdfToApi('/api/pdf/upload/to-ppt', pdfActivePath, '.pptx');
+    return;
+  }
+  if (backendMode === 'local') {
+    showStatus('PowerPoint export needs a backend connection', true);
+    return;
+  }
+  await _pdfApiDownload('/api/pdf/to-ppt', { path: pdfActivePath });
 }
 
 async function _pdfApiDownload(endpoint, body) {
@@ -1495,7 +1538,7 @@ async function _pdfApiDownload(endpoint, body) {
 }
 
 async function getPdfInfo(path) {
-  if (backendMode === 'api') {
+  if (backendMode === 'api' && !usingLocalFiles()) {
     const resp = await fetchApi('/api/pdf/info?path=' + encodeURIComponent(path));
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     return resp.json();
@@ -1511,7 +1554,7 @@ async function getPdfInfo(path) {
       author = meta?.info?.Author || '';
     } catch { /* ignore */ }
 
-    const file = await backend.getFile(path);
+    const file = await localFsBridge.getFile(path);
     return {
       name: file.name,
       pages: pdf.numPages,
@@ -1524,11 +1567,36 @@ async function getPdfInfo(path) {
   }
 }
 
+async function uploadLocalPdfToApi(endpoint, path, extension) {
+  showStatus('Uploading to backend…');
+  try {
+    const file = await localFsBridge.getFile(path);
+    const formData = new FormData();
+    formData.append('file', file, file.name);
+    formData.append('filename', file.name.replace(/\.pdf$/i, extension));
+    const resp = await fetchApi(endpoint, {
+      method: 'POST',
+      body: formData,
+    });
+    if (!resp.ok) {
+      const d = await resp.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${resp.status}`);
+    }
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const fname = disposition.match(/filename="?([^";\n]+)"?/)?.[1] || file.name.replace(/\.pdf$/i, extension);
+    _triggerDownload(await resp.blob(), fname);
+    showStatus('Downloaded: ' + fname);
+  } catch (err) {
+    showStatus('Error: ' + err.message, true);
+    console.error(err);
+  }
+}
+
 async function _loadLocalPdf(path) {
   if (typeof pdfjsLib === 'undefined') {
     throw new Error('PDF runtime not loaded');
   }
-  const file = await backend.getFile(path);
+  const file = await localFsBridge.getFile(path);
   const data = await file.arrayBuffer();
   return pdfjsLib.getDocument({ data }).promise;
 }
@@ -1557,7 +1625,7 @@ async function localPdfExtract(path, spec) {
 
   showStatus('Extracting pages…');
   try {
-    const srcFile = await backend.getFile(path);
+    const srcFile = await localFsBridge.getFile(path);
     const srcBytes = await srcFile.arrayBuffer();
     const srcPdf = await PDFLib.PDFDocument.load(srcBytes);
     const pageNumbers = _parsePageSpec(spec, srcPdf.getPageCount());
@@ -1585,7 +1653,7 @@ async function localPdfMerge(paths, filename) {
   try {
     const merged = await PDFLib.PDFDocument.create();
     for (const path of paths) {
-      const file = await backend.getFile(path);
+      const file = await localFsBridge.getFile(path);
       const pdf = await PDFLib.PDFDocument.load(await file.arrayBuffer());
       const copied = await merged.copyPages(pdf, pdf.getPageIndices());
       copied.forEach(page => merged.addPage(page));
@@ -1606,8 +1674,8 @@ async function localPdfInsert(basePath, insertPath, afterPage) {
 
   showStatus('Inserting PDF…');
   try {
-    const baseFile = await backend.getFile(basePath);
-    const insertFile = await backend.getFile(insertPath);
+    const baseFile = await localFsBridge.getFile(basePath);
+    const insertFile = await localFsBridge.getFile(insertPath);
     const basePdf = await PDFLib.PDFDocument.load(await baseFile.arrayBuffer());
     const insertPdf = await PDFLib.PDFDocument.load(await insertFile.arrayBuffer());
     const outPdf = await PDFLib.PDFDocument.create();
@@ -1638,7 +1706,7 @@ async function localPdfToWord(path) {
   showStatus('Converting PDF to Word…');
   try {
     const pages = await _extractPdfTextPages(path);
-    const file = await backend.getFile(path);
+    const file = await localFsBridge.getFile(path);
     const children = [];
 
     pages.forEach((pageText, index) => {
@@ -1674,7 +1742,7 @@ async function localPdfToExcel(path) {
   showStatus('Converting PDF to Excel…');
   try {
     const pages = await _extractPdfTextPages(path);
-    const file = await backend.getFile(path);
+    const file = await localFsBridge.getFile(path);
     const wb = XLSX.utils.book_new();
 
     pages.forEach((pageText, index) => {
@@ -1768,8 +1836,8 @@ function _openPdfViewer(path) {
   paneTitle.textContent = '📑 ' + name;
 
   // Point iframe at the stream endpoint
-  if (backendMode === 'local') {
-    backend.getObjectUrl(path)
+  if (usingLocalFiles()) {
+    localFsBridge.getObjectUrl(path)
       .then(url => {
         pdfIframe.src = url;
         showStatus('PDF: ' + name);
@@ -1799,8 +1867,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // PDF viewer toolbar buttons
   document.getElementById('pdf-viewer-download')?.addEventListener('click', () => {
     if (pdfActivePath) {
-      if (backendMode === 'local') {
-        backend.getObjectUrl(pdfActivePath).then(url => {
+      if (usingLocalFiles()) {
+        localFsBridge.getObjectUrl(pdfActivePath).then(url => {
           const a = document.createElement('a');
           a.href = url;
           a.download = pdfActivePath.split(/[/\\]/).pop();

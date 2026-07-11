@@ -1,11 +1,57 @@
-﻿# PyMD Editor - 项目开发总结
+﻿# PyMD — 项目总结
 
-## 📋 项目信息
+## 定位
 
-**项目名称**: PyMD Editor  
-**开发日期**: 2025年10月15日  
-**开发模式**: Agent 驱动开发 + Python 工具链  
-**许可证**: MIT License (开源免费)
+PyMD 是一个**本地优先**的文档工作区，专注于 Markdown 编辑与多格式文档转换。用户可以完全在本地运行，也可以将其部署为个人服务器，作为多设备共享或小团队使用的 File/DataHub。
+
+## 第一阶段功能
+
+| 功能 | 说明 |
+|------|------|
+| Markdown 编辑 | 实时预览、WYSIWYG 模式、深色/浅色主题 |
+| PDF 转换 | PDF → Markdown / Word / Excel / PowerPoint（后端驱动） |
+| Markdown 导出 | Markdown → Word / PDF |
+| 文件浏览 | 浏览和管理 `.md`、`.pdf` 文件夹 |
+| PDF 工具 | 预览、合并、拆分、提取页面 |
+| AI 助手 | 可选的写作辅助聊天面板 |
+
+## 技术栈
+
+| 层 | 技术 |
+|----|------|
+| 桌面端 | Python 3.9+, PyQt6 |
+| Web 前端 | HTML/CSS/JS（静态，无框架） |
+| 后端 | FastAPI + Python |
+| 容器 | Docker / docker-compose |
+| 文档转换 | python-docx, pdfplumber, weasyprint |
+
+## 部署模式
+
+1. **本地模式（默认）** — 前后端均在用户机器上运行，无需联网
+2. **个人服务器 / File DataHub** — 后端运行在用户自己的服务器，多设备共享文档
+3. **Windows 桌面应用** — 独立 Qt 应用（`run_editor.bat` 或打包 EXE）
+4. **Docker** — 容器化的个人服务器
+
+## 项目结构
+
+```
+src/pymd_editor/
+  main.py              # 入口；路由 Qt 或 Web 模式
+  app.py               # MainWindow（Qt GUI）
+  renderer.py          # Markdown → HTML
+  exporter.py          # Word / PDF 导出
+  wysiwyg_editor.py    # WYSIWYG 编辑模式
+  three_column_layout.py  # 三栏布局 + AI 面板
+  ai_framework.py      # AI 提供商抽象
+  server/
+    serve.py           # FastAPI 应用
+    api.py             # REST 接口
+    static/            # Web UI 静态资源
+```
+
+## 许可证
+
+MIT
 
 ## ✅ 已完成功能
 
@@ -36,160 +82,6 @@
 5. ✅ **导出功能**
    - Word 导出 (.docx) - 使用 python-docx (Ctrl+Shift+W)
    - PDF 导出 - 使用 weasyprint (Ctrl+Shift+P)
-   - 支持深色主题导出
+## 许可证
 
-6. ✅ **用户界面**
-   - 左右分屏布局（可拖拽调整）
-   - 工具栏快捷操作
-   - 状态栏实时反馈
-   - 窗口标题显示文件名和修改状态
-
-## 🗂️ 项目结构
-
-```
-微观社会经济/
-├── .venv/                      # Python 3.13 虚拟环境
-│   └── [PyQt6, markdown2, python-docx 等依赖]
-├── src/
-│   └── pymd_editor/
-│       ├── __init__.py         # 包初始化文件
-│       ├── main.py             # 应用启动入口
-│       ├── app.py              # 主窗口类 (MainWindow)
-│       ├── renderer.py         # Markdown 渲染器 + CSS
-│       └── exporter.py         # PDF/Word 导出器
-├── EXAMPLE.md                  # 功能演示示例文档
-├── LICENSE                     # MIT 开源许可证
-├── README.md                   # 项目说明文档
-├── requirements.txt            # Python 依赖列表
-├── run_editor.bat             # Windows 批处理启动脚本
-├── run_editor.ps1             # PowerShell 启动脚本
-└── windows_gui_md_editor_srd.md  # 原始设计文档
-```
-
-## 🛠️ 技术栈
-
-| 技术 | 版本 | 用途 |
-|------|------|------|
-| Python | 3.13.1 | 核心开发语言 |
-| PyQt6 | 6.9.1 | GUI 框架 |
-| PyQt6-WebEngine | 6.9.0 | HTML 预览引擎 |
-| markdown2 | 2.5.4 | Markdown → HTML |
-| python-docx | 1.2.0 | Word 文档生成 |
-| weasyprint | (可选) | PDF 导出 |
-
-## 🎯 设计原则
-
-1. **模块化架构**
-   - 渲染、导出、UI 逻辑分离
-   - 易于扩展新功能
-
-2. **用户体验优先**
-   - 实时预览（150ms 防抖）
-   - 快捷键支持
-   - 未保存提示
-
-3. **开源免费**
-   - MIT 许可证
-   - 无预付费
-   - 代码公开透明
-
-## 📊 性能指标
-
-- 启动时间: < 2秒
-- 预览刷新延迟: 150ms (防抖)
-- 支持文件大小: 测试至 10MB
-- 内存占用: ~80-120 MB (含 WebEngine)
-
-## 🚀 快速启动
-
-### 方法 1: 双击启动脚本
-```
-run_editor.bat  或  run_editor.ps1
-```
-
-### 方法 2: 命令行
-```powershell
-cd "C:\Users\Leon Liu\Desktop\微观社会经济\src"
-& "../.venv/Scripts/python.exe" -m pymd_editor.main
-```
-
-## 📈 未来路线图
-
-### 近期计划
-- [ ] 语法高亮编辑器（Pygments 或 QScintilla）
-- [ ] 用户配置持久化（JSON 保存窗口大小、主题等）
-- [ ] 自定义导出模板
-- [ ] 文件最近打开列表
-
-### 中期计划
-- [ ] 插件系统架构
-- [ ] 更多 Markdown 扩展（数学公式、图表）
-- [ ] 导出带目录的 PDF
-- [ ] 多语言支持
-
-### 长期愿景
-- [ ] 云同步功能（收费服务）
-- [ ] 协作编辑
-- [ ] 版本控制集成
-
-## 🧪 测试覆盖
-
-### 已测试场景
-- ✅ 新建/打开/保存文件
-- ✅ 实时预览同步
-- ✅ 主题切换
-- ✅ Word 导出
-- ✅ 未保存更改提示
-- ✅ 空文档处理
-
-### 待测试
-- ⏳ PDF 导出（需 weasyprint）
-- ⏳ 大文件性能 (>10MB)
-- ⏳ 特殊字符处理
-- ⏳ Unicode 文件名支持
-
-## 💡 开发心得
-
-1. **Agent 驱动开发优势**
-   - 快速原型搭建
-   - 模块化设计清晰
-   - 代码质量稳定
-
-2. **Python + PyQt6 选型正确**
-   - 跨平台能力强
-   - WebEngine 渲染效果好
-   - 生态库丰富
-
-3. **MVP 优先策略**
-   - 核心功能先行
-   - 快速验证可行性
-   - 迭代优化容易
-
-## 📝 开源协议
-
-本项目采用 **MIT License**：
-- ✅ 商业使用
-- ✅ 修改
-- ✅ 分发
-- ✅ 私有使用
-- ⚠️ 需保留版权声明
-
-## 🤝 贡献指南
-
-欢迎贡献代码！步骤：
-1. Fork 项目
-2. 创建功能分支
-3. 提交代码
-4. 发起 Pull Request
-
-## 📞 联系方式
-
-- Issue: [项目 GitHub Issues]
-- Email: [开发者邮箱]
-- 讨论: [社区论坛]
-
----
-
-**项目状态**: ✅ MVP 完成，可正常使用  
-**下一步**: 添加语法高亮编辑器  
-**最后更新**: 2025年10月15日
+MIT

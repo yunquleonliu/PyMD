@@ -13,6 +13,7 @@ RUN pip install --no-cache-dir \
     "httpx>=0.25.0" \
     "pdf2docx>=0.5.6" \
     "openpyxl>=3.1" \
+    "python-pptx>=0.6.23" \
     "pymupdf>=1.22.5" \
     "python-dateutil>=2.8.2"
 

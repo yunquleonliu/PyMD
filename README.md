@@ -1,86 +1,67 @@
 # PyMD
 
-PyMD is a document workspace and conversion bridge built around one shared web UI and three deployment modes:
+PyMD 是一个**本地优先**的文档工作区，专注于 Markdown 编辑与多格式文档转换。可完全在本地运行，也可将其部署为个人服务器，作为多设备共享的 File/DataHub 使用。
 
-1. Full local
-   Frontend and backend both run on the user's machine.
-2. Official cloud
-   Frontend connects to the official backend at `https://dataflowxx.dpdns.org`.
-3. Customer self-hosted
-   Frontend connects to a customer-managed backend that exposes the same API.
+## 第一阶段功能
 
-GitHub Pages is kept as the demo and lightweight entry. The real product entry is `dataflowxx.dpdns.org`, where high-fidelity conversion is expected to run through the Python backend.
+- **Markdown 编辑** — 实时预览、WYSIWYG 模式、深色/浅色主题
+- **PDF 转换** — PDF → Markdown / Word / Excel / PowerPoint（后端驱动）
+- **Markdown 导出** — Markdown → Word / PDF
+- **文件浏览** — 浏览和管理 `.md`、`.pdf` 文件夹
+- **PDF 工具** — 预览、合并、拆分、提取页面
+- **AI 助手** — 可选的写作辅助聊天面板
 
-## What PyMD Covers
+## 快速启动
 
-- Markdown editing with preview and WYSIWYG support
-- Folder browsing for subdirectories, `.md`, and `.pdf`
-- PDF preview, extract, merge, insert
-- Markdown export to Word
-- PDF to Word and PDF to Excel through the backend
-- One frontend that can switch between local, official cloud, and private backend
-
-## Product Split
-
-- `GitHub Pages`
-  Demo, docs, release entry, browser-only fallback.
-- `dataflowxx.dpdns.org`
-  Official branded entry and production backend.
-- Customer server
-  Private deployment using the same backend contract.
-
-## Quick Start
-
-### Full local mode
+### 本地模式（默认）
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
+pip install -e .
 python -m pymd_editor.server.serve --dir data --host 127.0.0.1 --port 8765 --no-browser
 ```
 
-Open `http://127.0.0.1:8765`.
+打开 `http://127.0.0.1:8765`。
 
-### Local Docker mode
+### 个人服务器 / File DataHub
+
+在你自己的机器或私有主机上运行后端，从其他设备访问。
+
+```bash
+# 在服务器机器上
+python -m pymd_editor.server.serve --dir /path/to/docs --host 0.0.0.0 --port 8765
+```
+
+### Windows 桌面应用
+
+```
+run_editor.bat
+```
+
+### Docker
 
 ```bash
 docker compose up --build
 ```
 
-### Demo build for GitHub Pages
+## 后端选择器
 
-```bash
-python build_web.py --out docs --base-url /PyMD/
-```
+Web UI 工具栏支持运行时切换后端：
 
-## Backend Selection In The UI
+| 模式 | 连接目标 |
+|------|---------|
+| Auto | 同源 → localhost → 纯浏览器 |
+| Localhost | `http://127.0.0.1:8765` |
+| Custom server | 你的个人服务器 URL |
+| Demo / Lite | 纯浏览器（无需后端） |
 
-The toolbar backend selector supports:
-
-- `Auto`
-- `Demo / Lite`
-- `Localhost`
-- `Official Cloud`
-- `Custom server`
-
-This lets the same UI connect to:
-
-- a local backend on `127.0.0.1`
-- your official backend on `dataflowxx.dpdns.org`
-- a customer backend on their own domain
-
-## Key Docs
+## 相关文档
 
 - [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md)
-- [deploy/dataflowxx/README.md](deploy/dataflowxx/README.md)
-
-## Current Direction
-
-- GitHub Pages remains the public demo
-- `dataflowxx.dpdns.org` becomes the official homepage and service entry
-- the Python backend owns high-fidelity conversion quality
-- customer private deployments reuse the same backend image and API
+- [ARCHITECTURE_v2.0.md](ARCHITECTURE_v2.0.md)
+- [AI_USAGE_GUIDE.md](AI_USAGE_GUIDE.md)
 
 ## License
 

@@ -6,12 +6,13 @@ against BASE_DIR to prevent path traversal.
 """
 from __future__ import annotations
 
+import io
 import os
 import tempfile
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException, Query, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Query, BackgroundTasks, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
@@ -74,7 +75,92 @@ def _feature_flags() -> dict[str, bool]:
         "pdf_insert": True,
         "pdf_to_word": True,
         "pdf_to_excel": True,
+        "pdf_to_ppt": True,
     }
+
+
+def _convert_pdf_path_to_word(pdf_path: Path, out_path: Path) -> None:
+    from pdf2docx import Converter
+
+    cv = Converter(str(pdf_path))
+    try:
+        cv.convert(str(out_path), start=0, end=None)
+    finally:
+        cv.close()
+
+
+def _convert_pdf_path_to_excel(pdf_path: Path, out_path: Path) -> None:
+    import fitz, openpyxl
+
+    doc = fitz.open(str(pdf_path))
+    try:
+        wb = openpyxl.Workbook()
+        wb.remove(wb.active)
+        for pg_num, page in enumerate(doc, 1):
+            ws = wb.create_sheet(title=f"Page {pg_num}")
+            blocks = sorted(page.get_text("blocks"), key=lambda b: (round(b[1] / 10) * 10, b[0]))
+            row = 1
+            for blk in blocks:
+                if blk[6] != 0:
+                    continue
+                for line in blk[4].strip().splitlines():
+                    cells = [c.strip() for c in line.split("\t")] if "\t" in line else [line]
+                    for col, val in enumerate(cells, 1):
+                        ws.cell(row=row, column=col, value=val)
+                    row += 1
+        wb.save(str(out_path))
+    finally:
+        doc.close()
+
+
+def _convert_pdf_path_to_ppt(pdf_path: Path, out_path: Path) -> None:
+    import fitz
+    from pptx import Presentation
+    from pptx.util import Emu
+
+    doc = fitz.open(str(pdf_path))
+    try:
+        prs = Presentation()
+        prs.slide_width = Emu(13_333_333)
+        prs.slide_height = Emu(7_500_000)
+        blank = prs.slide_layouts[6]
+
+        for page in doc:
+            slide = prs.slides.add_slide(blank)
+            pix = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            img_bytes = pix.tobytes("png")
+
+            page_rect = page.rect
+            page_ratio = page_rect.width / page_rect.height if page_rect.height else 1.0
+            slide_ratio = prs.slide_width / prs.slide_height
+
+            if page_ratio >= slide_ratio:
+                width = prs.slide_width
+                height = int(width / page_ratio)
+                left = 0
+                top = int((prs.slide_height - height) / 2)
+            else:
+                height = prs.slide_height
+                width = int(height * page_ratio)
+                top = 0
+                left = int((prs.slide_width - width) / 2)
+
+            slide.shapes.add_picture(io.BytesIO(img_bytes), left, top, width=width, height=height)
+
+        if len(prs.slides) > 1:
+            first_slide = prs.slides._sldIdLst[0]
+            prs.slides._sldIdLst.remove(first_slide)
+
+        prs.save(str(out_path))
+    finally:
+        doc.close()
+
+
+def _tmp_named(suffix: str) -> Path:
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    path = Path(tmp.name)
+    tmp.close()
+    return path
 
 
 # ---------------------------------------------------------------------------
@@ -470,10 +556,8 @@ def pdf_insert(req: PDFInsertRequest, bg: BackgroundTasks):
 def pdf_to_word(req: PDFToWordRequest, bg: BackgroundTasks):
     p = _safe_path(req.path);  _require_pdf(p)
     try:
-        from pdf2docx import Converter
-        tmp = tempfile.NamedTemporaryFile(suffix=".docx", delete=False)
-        tmp_path = Path(tmp.name);  tmp.close()
-        cv = Converter(str(p));  cv.convert(str(tmp_path));  cv.close()
+        tmp_path = _tmp_named(".docx")
+        _convert_pdf_path_to_word(p, tmp_path)
         fname = Path(req.filename or (p.stem + ".docx")).name
         bg.add_task(tmp_path.unlink, True)
         return FileResponse(
@@ -490,25 +574,8 @@ def pdf_to_word(req: PDFToWordRequest, bg: BackgroundTasks):
 def pdf_to_excel(req: PDFToExcelRequest, bg: BackgroundTasks):
     p = _safe_path(req.path);  _require_pdf(p)
     try:
-        import fitz, openpyxl
-        doc = fitz.open(str(p))
-        wb  = openpyxl.Workbook();  wb.remove(wb.active)
-        for pg_num, page in enumerate(doc, 1):
-            ws = wb.create_sheet(title=f"Page {pg_num}")
-            blocks = sorted(page.get_text("blocks"), key=lambda b: (round(b[1]/10)*10, b[0]))
-            row = 1
-            for blk in blocks:
-                if blk[6] != 0:
-                    continue
-                for line in blk[4].strip().splitlines():
-                    cells = [c.strip() for c in line.split("\t")] if "\t" in line else [line]
-                    for col, val in enumerate(cells, 1):
-                        ws.cell(row=row, column=col, value=val)
-                    row += 1
-        doc.close()
-        tmp = tempfile.NamedTemporaryFile(suffix=".xlsx", delete=False)
-        tmp_path = Path(tmp.name);  tmp.close()
-        wb.save(str(tmp_path))
+        tmp_path = _tmp_named(".xlsx")
+        _convert_pdf_path_to_excel(p, tmp_path)
         fname = Path(req.filename or (p.stem + ".xlsx")).name
         bg.add_task(tmp_path.unlink, True)
         return FileResponse(
@@ -519,6 +586,110 @@ def pdf_to_excel(req: PDFToExcelRequest, bg: BackgroundTasks):
         raise
     except Exception as e:
         raise HTTPException(500, str(e))
+
+
+class PDFToPptRequest(BaseModel):
+    path: str
+    filename: Optional[str] = None
+
+
+@app.post("/api/pdf/to-ppt")
+def pdf_to_ppt(req: PDFToPptRequest, bg: BackgroundTasks):
+    p = _safe_path(req.path);  _require_pdf(p)
+    try:
+        tmp_path = _tmp_named(".pptx")
+        _convert_pdf_path_to_ppt(p, tmp_path)
+        fname = Path(req.filename or (p.stem + ".pptx")).name
+        bg.add_task(tmp_path.unlink, True)
+        return FileResponse(
+            str(tmp_path), filename=fname,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, str(e))
+
+
+def _uploaded_pdf_to_temp(upload: UploadFile) -> tuple[Path, str]:
+    suffix = Path(upload.filename or "upload.pdf").suffix or ".pdf"
+    tmp_path = _tmp_named(suffix)
+    with tmp_path.open("wb") as f:
+        while True:
+            chunk = upload.file.read(1024 * 1024)
+            if not chunk:
+                break
+            f.write(chunk)
+    return tmp_path, Path(upload.filename or "document.pdf").stem
+
+
+@app.post("/api/pdf/upload/to-word")
+def pdf_upload_to_word(
+    bg: BackgroundTasks,
+    file: UploadFile = File(...),
+    filename: Optional[str] = Form(default=None),
+):
+    src_path, stem = _uploaded_pdf_to_temp(file)
+    try:
+        _require_pdf(src_path)
+        out_path = _tmp_named(".docx")
+        _convert_pdf_path_to_word(src_path, out_path)
+        out_name = Path(filename or (stem + ".docx")).name
+        bg.add_task(src_path.unlink, True)
+        bg.add_task(out_path.unlink, True)
+        return FileResponse(
+            str(out_path), filename=out_name,
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        )
+    except Exception:
+        src_path.unlink(missing_ok=True)
+        raise
+
+
+@app.post("/api/pdf/upload/to-excel")
+def pdf_upload_to_excel(
+    bg: BackgroundTasks,
+    file: UploadFile = File(...),
+    filename: Optional[str] = Form(default=None),
+):
+    src_path, stem = _uploaded_pdf_to_temp(file)
+    try:
+        _require_pdf(src_path)
+        out_path = _tmp_named(".xlsx")
+        _convert_pdf_path_to_excel(src_path, out_path)
+        out_name = Path(filename or (stem + ".xlsx")).name
+        bg.add_task(src_path.unlink, True)
+        bg.add_task(out_path.unlink, True)
+        return FileResponse(
+            str(out_path), filename=out_name,
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        )
+    except Exception:
+        src_path.unlink(missing_ok=True)
+        raise
+
+
+@app.post("/api/pdf/upload/to-ppt")
+def pdf_upload_to_ppt(
+    bg: BackgroundTasks,
+    file: UploadFile = File(...),
+    filename: Optional[str] = Form(default=None),
+):
+    src_path, stem = _uploaded_pdf_to_temp(file)
+    try:
+        _require_pdf(src_path)
+        out_path = _tmp_named(".pptx")
+        _convert_pdf_path_to_ppt(src_path, out_path)
+        out_name = Path(filename or (stem + ".pptx")).name
+        bg.add_task(src_path.unlink, True)
+        bg.add_task(out_path.unlink, True)
+        return FileResponse(
+            str(out_path), filename=out_name,
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        )
+    except Exception:
+        src_path.unlink(missing_ok=True)
+        raise
 
 
 # ===========================================================================

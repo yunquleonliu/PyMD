@@ -1,105 +1,96 @@
 # PyMD Deployment Modes
 
-PyMD is now organized around one shared frontend and three backend-capable deployment modes.
+PyMD is local-first. The default and recommended mode is a single user running everything on their own machine. A personal server mode enables multi-device access or small-team sharing via a File/DataHub.
 
-## The Three Modes
+## Mode 1 — Full local (default)
 
-1. Full local
-   The user runs both frontend and backend locally with `pymd serve` or Docker.
-2. Official cloud
-   The frontend connects to the official backend at `https://dataflowxx.dpdns.org`.
-3. Customer self-hosted
-   The frontend connects to a customer-managed backend with the same API and feature contract.
+Frontend and backend both run on the user's machine. No internet required.
 
-## Role Of GitHub Pages
+```bash
+pip install -r requirements.txt
+pip install -e .
+python -m pymd_editor.server.serve --dir data --host 127.0.0.1 --port 8765 --no-browser
+```
 
-GitHub Pages is not the official service backend.
+Open `http://127.0.0.1:8765`.
 
-Its role is:
+- All files stay on your machine
+- No external dependencies
+- Single user
 
-- demo entry
-- lightweight browser-only mode
-- documentation and release landing page
-- optional jump-off point to the official cloud
+## Mode 2 — Personal server / File DataHub
 
-Its role is not:
+Run the backend on any machine you control. Connect from other devices or share a document folder with a small team.
 
-- high-fidelity backend conversion
-- long-running document processing
-- the source of truth for production quality
+```bash
+# On the host machine
+python -m pymd_editor.server.serve --dir /path/to/docs --host 0.0.0.0 --port 8765
+```
 
-## Role Of dataflowxx
+Connect from any device by pointing the frontend to `http://<host-ip>:8765`.
 
-`https://dataflowxx.dpdns.org` is the official branded service entry.
+Use cases:
+- Access your docs from multiple computers
+- Share a document folder with your team
+- Run on a NAS or home server
 
-It should provide:
+## Mode 3 — Windows desktop app
 
-- the official homepage / brand entry
-- the real web app entry under `/app/`
-- the Python backend under `/api/*`
-- high-fidelity PDF to Word / Excel conversion
-- the same API contract used by private deployments
+Standalone Qt application. No browser needed.
 
-## Frontend Connection Model
+```
+run_editor.bat
+```
 
-The shared frontend supports these runtime choices:
+Build a distributable EXE:
 
-- `Auto`
-  Try same-origin API first, then localhost, then browser-only mode.
-- `Demo / Lite`
-  Force browser-only behavior.
-- `Localhost`
-  Connect to `http://127.0.0.1:8765`.
-- `Official Cloud`
-  Connect to `https://dataflowxx.dpdns.org`.
-- `Custom server`
-  Connect to a user-provided backend URL.
+```bash
+pyinstaller build_exe.spec --noconfirm
+```
 
-This keeps user interaction consistent even when deployment changes.
+## Mode 4 — Docker
 
-## Backend Contract
+Containerised personal server, easiest to deploy on a remote machine.
 
-Every production backend should expose:
+```bash
+docker compose up --build
+```
+
+## Frontend Backend Selector
+
+The web UI toolbar backend selector supports:
+
+| Option | Connects to |
+|--------|-------------|
+| Auto | Same-origin → localhost → browser-only |
+| Demo / Lite | Browser-only (no backend) |
+| Localhost | `http://127.0.0.1:8765` |
+| Custom server | Your personal server URL |
+
+## Backend API Contract
+
+Every backend exposes:
 
 - `GET /api/health`
 - `POST /api/render`
-- `GET /api/files`
-- `GET /api/file`
-- `POST /api/file`
-- `DELETE /api/file`
-- `POST /api/file/rename`
+- `GET /api/files`, `GET /api/file`, `POST /api/file`, `DELETE /api/file`, `POST /api/file/rename`
 - `POST /api/folder`
 - `POST /api/export/word`
-- `GET /api/pdf/info`
-- `GET /api/pdf/stream`
-- `POST /api/pdf/extract`
-- `POST /api/pdf/merge`
-- `POST /api/pdf/insert`
-- `POST /api/pdf/to-word`
-- `POST /api/pdf/to-excel`
+- `GET /api/pdf/info`, `GET /api/pdf/stream`
+- `POST /api/pdf/extract`, `POST /api/pdf/merge`, `POST /api/pdf/insert`
+- `POST /api/pdf/to-word`, `POST /api/pdf/to-excel`, `POST /api/pdf/to-ppt`
 
 ## Health Payload
-
-`/api/health` should describe deployment mode and features:
 
 ```json
 {
   "status": "ok",
-  "deployment_mode": "cloud",
-  "public_base_url": "https://dataflowxx.dpdns.org",
+  "deployment_mode": "local",
   "features": {
     "folder_browse": true,
     "pdf_to_word": true,
-    "pdf_to_excel": true
+    "pdf_to_excel": true,
+    "pdf_to_ppt": true
   }
 }
 ```
-
-## Deployment Summary
-
-- GitHub Pages
-  Demo and docs only.
-- `dataflowxx.dpdns.org`
-  Official homepage, official app entry, official backend.
-- Customer server
-  Same backend image and same API, different domain and ownership.
