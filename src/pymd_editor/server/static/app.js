@@ -390,11 +390,36 @@ class LocalFsBackend {
 let backend = null;
 let backendMode = 'none';
 let localFsBridge = null;
+let localFolderUnavailableReason = '';
+
+function setupLocalFolderButton() {
+  const btn = document.getElementById('btn-open-folder');
+  if (!btn) return false;
+
+  const supported = typeof window.showDirectoryPicker === 'function';
+  btn.classList.remove('hidden');
+  btn.classList.toggle('disabled', !supported);
+  btn.setAttribute('aria-disabled', supported ? 'false' : 'true');
+
+  if (supported) {
+    localFolderUnavailableReason = '';
+    btn.title = 'Open a local folder';
+    if (!localFsBridge) localFsBridge = new LocalFsBackend();
+    return true;
+  }
+
+  localFolderUnavailableReason = window.isSecureContext
+    ? 'Open Folder is not supported by this browser'
+    : 'Open Folder requires HTTPS or localhost in modern browsers';
+  btn.title = localFolderUnavailableReason;
+  return false;
+}
 
 async function detectBackend() {
-  if (typeof window.showDirectoryPicker === 'function' && !localFsBridge) {
+  const canOpenLocalFolder = setupLocalFolderButton();
+
+  if (canOpenLocalFolder && !localFsBridge) {
     localFsBridge = new LocalFsBackend();
-    document.getElementById('btn-open-folder').classList.remove('hidden');
   }
 
   for (const baseUrl of getPreferredApiCandidates()) {
@@ -420,7 +445,7 @@ async function detectBackend() {
   }
 
   // 2. File System Access API (Phase 3 PWA / standalone)
-  if (typeof window.showDirectoryPicker === 'function') {
+  if (canOpenLocalFolder) {
     backend     = localFsBridge || new LocalFsBackend();
     backendMode = 'local';
     apiBaseUrl = '';
@@ -435,7 +460,10 @@ async function detectBackend() {
   apiBaseUrl = '';
   backendInfo = null;
   _updateModeBadge('⚠ Preview only');
-  showStatus('Run  pymd serve  to enable file operations', true);
+  showStatus(window.isSecureContext
+    ? 'Run  pymd serve  to enable file operations'
+    : 'Open Folder requires HTTPS or localhost; run locally or serve over HTTPS',
+    true);
 }
 
 function _updateModeBadge(label) {
@@ -713,7 +741,10 @@ async function doSave(path) {
 // ── Folder picker (Phase 3 standalone) ───────────────────────────────────────
 
 async function openFolder() {
-  if (!localFsBridge) return;
+  if (!localFsBridge) {
+    showStatus(localFolderUnavailableReason || 'Open Folder is not available in this browser', true);
+    return;
+  }
   try {
     await localFsBridge.openFolder();
     state.fileSource = 'localfs';

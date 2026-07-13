@@ -2,6 +2,8 @@
 
 This folder defines the recommended production shape for `https://dataflowxx.dpdns.org`.
 
+`dataflowxx.dpdns.org` is the official control plane, cloud service entry, and customer subdomain coordinator.
+
 ## Product Structure
 
 - `/`
@@ -17,7 +19,8 @@ This folder defines the recommended production shape for `https://dataflowxx.dpd
 
 - Make `dataflowxx.dpdns.org` the official service entrance
 - Keep GitHub Pages as the demo and lightweight fallback
-- Use the same backend contract for official cloud and customer self-hosted deployments
+- Assign customer HTTPS subdomains for vLAN/self-hosted deployments
+- Use the same backend contract for official cloud and customer subdomain deployments
 
 ## Start The Backend
 
@@ -51,8 +54,14 @@ After deployment, verify:
 ## Recommended Split
 
 - `dataflowxx.dpdns.org`
-  Official product and backend
+  Official product, cloud backend, control plane, and customer subdomain coordination
+- `customer-a.dataflowxx.dpdns.org`
+  Customer vLAN/self-hosted deployment assigned by Dataflowxx
 - GitHub Pages
   Demo / lite mode / docs
-- customer domain
-  Same backend API on customer infrastructure
+- customer-owned domain
+  Advanced customer-managed option using the same backend API
+
+Customer deployment templates:
+
+- [../customer-subdomain](../customer-subdomain)

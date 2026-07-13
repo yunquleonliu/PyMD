@@ -35,15 +35,28 @@ Recommended for:
 - official hosted conversion quality
 - users who want backend-powered features without managing their own server
 
-## Mode 3 — Customer self-hosted
+## Mode 3 — Customer subdomain self-hosted
 
-The frontend connects to a customer-managed backend with the same API contract.
+The frontend connects to a customer-managed backend through a Dataflowxx-assigned HTTPS subdomain.
+
+Example:
+
+- `https://customer-a.dataflowxx.dpdns.org`
+
+The customer does not need to own a public domain. We assign the subdomain and help route it to the customer vLAN by internal DNS, a managed tunnel, or another deployment mechanism.
 
 Recommended for:
 
 - private infrastructure
 - enterprise usage
 - regulated or isolated environments
+
+Default customer deployment:
+
+- PyMD backend runs on a customer server inside the vLAN
+- the assigned HTTPS subdomain is the user-facing entry
+- raw `http://10.x.x.x:8765` remains a debugging endpoint only
+- customer-owned domains are supported as an advanced customer-managed option
 
 ## Supporting Delivery Modes
 
@@ -79,7 +92,7 @@ The shared web UI supports:
 | Demo / Lite | Browser-only fallback |
 | Localhost | Force local backend |
 | Official Cloud | Force official backend |
-| Custom server | Force a private backend URL |
+| Custom server | Force a customer subdomain, tunnel URL, or private backend URL |
 
 ## Workspace Sync Direction
 
@@ -91,6 +104,36 @@ For cloud and self-hosted modes:
 - sync decides upload, download, and conflicts
 
 This prevents pretending that a remote backend can directly open the user's local filesystem.
+
+## Open Folder Security Boundary
+
+`Open Folder` is a browser-side local filesystem capability. It opens a folder on the user's current machine, then the frontend can upload selected files to whichever backend is active.
+
+Modern Chromium browsers expose this API only in secure contexts:
+
+- `http://localhost` and `http://127.0.0.1`
+- `https://...`
+
+This means `http://10.x.x.x:8765` can still serve the PyMD app and backend API, but it cannot enable browser local folder binding. For a server backend with local-folder UX, use one of these deployments:
+
+- use a Dataflowxx-assigned HTTPS customer subdomain
+- route the subdomain to the customer vLAN by internal DNS or managed tunnel
+- run the frontend locally on `localhost` and select the server backend as `Custom server` for debugging
+- run full local mode when the folder and backend are on the same machine
+
+## Dataflowxx Control Plane
+
+`https://dataflowxx.dpdns.org` is not just a demo URL. It is the official control plane and cloud service entry.
+
+Responsibilities:
+
+- official homepage and app entry
+- cloud conversion and sync services
+- customer subdomain assignment
+- routing/tunnel coordination
+- update and deployment guidance
+
+Customer self-hosted deployments should use assigned subdomains such as `https://customer-a.dataflowxx.dpdns.org`. If a customer wants their own domain, they manage that domain and certificate path themselves.
 
 ## Backend API Contract
 

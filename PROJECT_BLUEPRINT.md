@@ -47,11 +47,13 @@ It is intended to become:
 - files may stay local first, with sync and conversion delegated to the server
 - official endpoint: `https://dataflowxx.dpdns.org`
 
-### Mode 3 — Customer self-hosted
+### Mode 3 — Customer subdomain self-hosted
 
 - same frontend behavior
 - same backend API
-- backend owned by the customer
+- backend owned by the customer inside their vLAN
+- Dataflowxx assigns the HTTPS subdomain
+- internal DNS or a managed tunnel routes the subdomain to the customer backend
 - customer controls data boundary and deployment
 
 ## Secondary Delivery Modes
@@ -84,13 +86,13 @@ The Qt desktop app remains valid for:
 1. Experience layer
    Editor, file tree, preview, PDF tools, backend selector.
 2. Runtime layer
-   Browser-only, localhost backend, official cloud backend, custom backend.
+   Browser-only, localhost backend, official cloud backend, customer subdomain backend.
 3. Workspace layer
    Local folder binding, workspace indexing, sync planning.
 4. Capability layer
    Render, export, PDF conversion, metadata extraction.
 5. Host layer
-   Local Python, Docker, official cloud, customer infrastructure, GitHub Pages demo.
+   Local Python, Docker, official cloud, customer subdomain infrastructure, GitHub Pages demo.
 
 ## What Must Be Stable Going Forward
 

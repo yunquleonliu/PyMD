@@ -1,10 +1,10 @@
 # PyMD
 
-PyMD 是一个**本地优先**的文档工作区，专注于 Markdown 编辑与多格式文档转换。可完全在本地运行，也可将其部署为个人服务器，作为多设备共享的 File/DataHub 使用。
+PyMD 是一个**本地优先**的文档工作区，专注于 Markdown 编辑与多格式文档转换。可完全在本地运行，也可部署到客户 vLAN，并通过 Dataflowxx 分配的 HTTPS 子域作为企业 File/DataHub 使用。
 
 当前项目已经进入“正式化 init”阶段，核心方向是：
 
-- 明确三种正式部署模式
+- 明确三种正式部署模式：全本地、官方云、客户子域自部署
 - 统一 frontend + backend 能力边界
 - 引入 workspace sync 作为跨设备基础
 - 强化 Agent 协作与验证流程
@@ -32,14 +32,16 @@ python -m pymd_editor.server.serve --dir data --host 127.0.0.1 --port 8765 --no-
 
 打开 `http://127.0.0.1:8765`。
 
-### 个人服务器 / File DataHub
+### 客户子域自部署 / File DataHub
 
-在你自己的机器或私有主机上运行后端，从其他设备访问。
+在客户 vLAN 机器上运行后端，由 Dataflowxx 分配 HTTPS 子域，例如 `https://customer-a.dataflowxx.dpdns.org`。客户不需要自己购买域名；子域可以通过内网 DNS、隧道或其他部署机制指向客户服务器。
 
 ```bash
-# 在服务器机器上
+# 在客户服务器机器上
 python -m pymd_editor.server.serve --dir /path/to/docs --host 0.0.0.0 --port 8765
 ```
+
+Docker 模板见 [deploy/customer-subdomain](deploy/customer-subdomain)。
 
 ### Windows 桌面应用
 
@@ -62,8 +64,10 @@ Web UI 工具栏支持运行时切换后端：
 | Auto | 同源 → localhost → 纯浏览器 |
 | Localhost | `http://127.0.0.1:8765` |
 | Official Cloud | `https://dataflowxx.dpdns.org` |
-| Custom server | 你的个人服务器 URL |
+| Custom server | 客户子域、隧道 URL 或私有后端 URL |
 | Demo / Lite | 纯浏览器（无需后端） |
+
+`Open Folder` 是浏览器侧能力，打开的是当前用户机器上的本地目录。Chrome/Edge 只在 `localhost` 或 HTTPS 页面中开放该能力；如果直接访问 `http://10.x.x.x:8765` 这类局域网 HTTP 地址，前端会显示禁用状态。正式客户部署应使用 Dataflowxx 分配的 HTTPS 子域，`10.x.x.x:8765` 只作为调试入口。
 
 ## 相关文档
 

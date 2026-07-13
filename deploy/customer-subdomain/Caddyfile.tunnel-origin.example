@@ -1,0 +1,15 @@
+# Use this when HTTPS terminates at a managed tunnel/provider edge.
+# The tunnel should forward traffic to this local origin.
+
+:8080 {
+    encode gzip
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8765
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8765
+    }
+}
+

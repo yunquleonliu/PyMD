@@ -123,6 +123,6 @@ Phase 2:
 
 - local folder + localhost backend
 - local folder + official cloud backend
-- local folder + customer private backend
+- local folder + customer subdomain backend
 
 That is the foundation needed for a true local-first, three-mode product.

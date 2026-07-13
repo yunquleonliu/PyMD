@@ -1,0 +1,16 @@
+services:
+  pymd:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: pymd/editor-self-hosted
+    ports:
+      - "127.0.0.1:8765:8765"
+    environment:
+      PYMD_DEPLOYMENT_MODE: self_hosted
+      PYMD_PUBLIC_BASE_URL: ${PYMD_PUBLIC_BASE_URL}
+      PYMD_CORS_ALLOW_ORIGINS: ${PYMD_CORS_ALLOW_ORIGINS}
+    volumes:
+      - ${PYMD_DATA_DIR:-./data}:/data
+    restart: unless-stopped
+

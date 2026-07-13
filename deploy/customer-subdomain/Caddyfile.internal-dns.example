@@ -1,0 +1,16 @@
+{
+    email ops@dataflowxx.dpdns.org
+}
+
+{$PYMD_CUSTOMER_HOST} {
+    encode gzip
+    tls {$PYMD_TLS_CERT} {$PYMD_TLS_KEY}
+
+    handle /api/* {
+        reverse_proxy 127.0.0.1:8765
+    }
+
+    handle {
+        reverse_proxy 127.0.0.1:8765
+    }
+}
