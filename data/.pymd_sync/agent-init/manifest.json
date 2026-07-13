@@ -1,0 +1,14 @@
+{
+  "workspace_id": "agent-init",
+  "client_id": "local-1",
+  "updated_at": "2026-07-12T23:06:54.468570+00:00",
+  "files": [
+    {
+      "path": "notes/a.md",
+      "size": 12,
+      "modified": 1.0,
+      "sha256": "aaa",
+      "deleted": false
+    }
+  ]
+}

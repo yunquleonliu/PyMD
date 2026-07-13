@@ -2,6 +2,13 @@
 
 PyMD 是一个**本地优先**的文档工作区，专注于 Markdown 编辑与多格式文档转换。可完全在本地运行，也可将其部署为个人服务器，作为多设备共享的 File/DataHub 使用。
 
+当前项目已经进入“正式化 init”阶段，核心方向是：
+
+- 明确三种正式部署模式
+- 统一 frontend + backend 能力边界
+- 引入 workspace sync 作为跨设备基础
+- 强化 Agent 协作与验证流程
+
 ## 第一阶段功能
 
 - **Markdown 编辑** — 实时预览、WYSIWYG 模式、深色/浅色主题
@@ -54,12 +61,17 @@ Web UI 工具栏支持运行时切换后端：
 |------|---------|
 | Auto | 同源 → localhost → 纯浏览器 |
 | Localhost | `http://127.0.0.1:8765` |
+| Official Cloud | `https://dataflowxx.dpdns.org` |
 | Custom server | 你的个人服务器 URL |
 | Demo / Lite | 纯浏览器（无需后端） |
 
 ## 相关文档
 
+- [PROJECT_BLUEPRINT.md](PROJECT_BLUEPRINT.md)
 - [DEPLOYMENT_MODES.md](DEPLOYMENT_MODES.md)
+- [WORKSPACE_SYNC_ARCHITECTURE.md](WORKSPACE_SYNC_ARCHITECTURE.md)
+- [LOCAL_VALIDATION.md](LOCAL_VALIDATION.md)
+- [AGENTS.md](AGENTS.md)
 - [ARCHITECTURE_v2.0.md](ARCHITECTURE_v2.0.md)
 - [AI_USAGE_GUIDE.md](AI_USAGE_GUIDE.md)
 

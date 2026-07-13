@@ -7,8 +7,10 @@ against BASE_DIR to prevent path traversal.
 from __future__ import annotations
 
 import io
+import json
 import os
 import tempfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -76,6 +78,8 @@ def _feature_flags() -> dict[str, bool]:
         "pdf_to_word": True,
         "pdf_to_excel": True,
         "pdf_to_ppt": True,
+        "workspace_sync_manifest": True,
+        "workspace_sync_diff": True,
     }
 
 
@@ -163,6 +167,28 @@ def _tmp_named(suffix: str) -> Path:
     return path
 
 
+def _utc_now() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _sync_root() -> Path:
+    root = BASE_DIR / ".pymd_sync"
+    root.mkdir(parents=True, exist_ok=True)
+    return root
+
+
+def _workspace_dir(workspace_id: str) -> Path:
+    if not workspace_id or any(ch in workspace_id for ch in r'\/:*?"<>|'):
+        raise HTTPException(400, "Invalid workspace_id")
+    d = _sync_root() / workspace_id
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def _manifest_path(workspace_id: str) -> Path:
+    return _workspace_dir(workspace_id) / "manifest.json"
+
+
 # ---------------------------------------------------------------------------
 # Security helper
 # ---------------------------------------------------------------------------
@@ -210,6 +236,32 @@ class ExportWordRequest(BaseModel):
     filename: str = "document.docx"
 
 
+class WorkspaceFileEntry(BaseModel):
+    path: str
+    size: int = 0
+    modified: float = 0
+    sha256: str = ""
+    deleted: bool = False
+
+
+class WorkspaceManifestRequest(BaseModel):
+    workspace_id: str
+    client_id: Optional[str] = None
+    files: list[WorkspaceFileEntry]
+
+
+class WorkspaceDiffRequest(BaseModel):
+    workspace_id: str
+    client_id: Optional[str] = None
+    files: list[WorkspaceFileEntry]
+
+
+class WorkspaceUploadRequest(BaseModel):
+    workspace_id: str
+    path: str
+    sha256: str = ""
+
+
 # ---------------------------------------------------------------------------
 # Routes — Health
 # ---------------------------------------------------------------------------
@@ -223,6 +275,89 @@ def health():
         "deployment_mode": DEPLOYMENT_MODE,
         "public_base_url": PUBLIC_BASE_URL,
         "features": _feature_flags(),
+    }
+
+
+@app.get("/api/workspaces/sync/manifest")
+def workspace_manifest(workspace_id: str = Query(...)):
+    manifest_file = _manifest_path(workspace_id)
+    if not manifest_file.exists():
+        return {
+            "workspace_id": workspace_id,
+            "updated_at": None,
+            "client_id": None,
+            "files": [],
+        }
+    return json.loads(manifest_file.read_text(encoding="utf-8"))
+
+
+@app.post("/api/workspaces/sync/manifest")
+def workspace_manifest_upsert(req: WorkspaceManifestRequest):
+    manifest_file = _manifest_path(req.workspace_id)
+    payload = {
+        "workspace_id": req.workspace_id,
+        "client_id": req.client_id,
+        "updated_at": _utc_now(),
+        "files": [entry.model_dump() for entry in req.files],
+    }
+    manifest_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return {
+        "ok": True,
+        "workspace_id": req.workspace_id,
+        "file_count": len(req.files),
+        "updated_at": payload["updated_at"],
+    }
+
+
+@app.post("/api/workspaces/sync/diff")
+def workspace_sync_diff(req: WorkspaceDiffRequest):
+    manifest_file = _manifest_path(req.workspace_id)
+    remote = {
+        item["path"]: item
+        for item in json.loads(manifest_file.read_text(encoding="utf-8")).get("files", [])
+    } if manifest_file.exists() else {}
+    local = {item.path: item.model_dump() for item in req.files}
+
+    upload: list[str] = []
+    download: list[str] = []
+    conflicts: list[str] = []
+
+    all_paths = sorted(set(remote) | set(local))
+    for path in all_paths:
+        r = remote.get(path)
+        l = local.get(path)
+        if r is None and l is not None:
+            upload.append(path)
+            continue
+        if l is None and r is not None:
+            download.append(path)
+            continue
+        if not r or not l:
+            continue
+        if r.get("deleted") and not l.get("deleted"):
+            upload.append(path)
+            continue
+        if l.get("deleted") and not r.get("deleted"):
+            download.append(path)
+            continue
+        if r.get("sha256") == l.get("sha256"):
+            continue
+        r_m = float(r.get("modified") or 0)
+        l_m = float(l.get("modified") or 0)
+        if l_m > r_m:
+            upload.append(path)
+        elif r_m > l_m:
+            download.append(path)
+        else:
+            conflicts.append(path)
+
+    return {
+        "workspace_id": req.workspace_id,
+        "upload": upload,
+        "download": download,
+        "conflicts": conflicts,
+        "remote_file_count": len(remote),
+        "local_file_count": len(local),
     }
 
 

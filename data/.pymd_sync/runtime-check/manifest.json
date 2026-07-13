@@ -1,0 +1,14 @@
+{
+  "workspace_id": "runtime-check",
+  "client_id": "manual",
+  "updated_at": "2026-07-13T02:01:35.400436+00:00",
+  "files": [
+    {
+      "path": "notes/a.md",
+      "size": 10,
+      "modified": 1.0,
+      "sha256": "aaa",
+      "deleted": false
+    }
+  ]
+}
