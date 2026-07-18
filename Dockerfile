@@ -26,7 +26,7 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin/uvicorn /usr/local/bin/uvicorn
 
-# Copy source (no Qt deps, no PDF deps needed for the web server)
+# Copy source. The web server image includes backend PDF/document conversion deps.
 COPY src/ ./src/
 
 # Make pymd_editor importable
