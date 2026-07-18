@@ -80,6 +80,7 @@ def _feature_flags() -> dict[str, bool]:
         "pdf_to_ppt": True,
         "workspace_sync_manifest": True,
         "workspace_sync_diff": True,
+        "server_file_upload": True,
     }
 
 
@@ -214,6 +215,9 @@ def _safe_path(rel_or_abs: str) -> Path:
         raise HTTPException(status_code=403, detail="Path outside allowed directory")
 
     return p
+
+
+ALLOWED_WORKSPACE_EXTS = {".md", ".pdf", ".docx", ".xlsx", ".pptx"}
 
 
 # ---------------------------------------------------------------------------
@@ -388,9 +392,9 @@ def render(req: RenderRequest):
 @app.get("/api/files")
 def list_files(
     dir: str = Query(default=""),
-    types: str = Query(default="md"),          # comma-separated: md,pdf
+    types: str = Query(default="md"),          # comma-separated: md,pdf,docx,xlsx,pptx
 ):
-    """List files in a directory. types=md,pdf to include PDFs."""
+    """List workspace files in a directory."""
     target = _safe_path(dir) if dir else BASE_DIR
     if not target.is_dir():
         raise HTTPException(status_code=400, detail="Not a directory")
@@ -398,7 +402,7 @@ def list_files(
     allowed_exts = set()
     for t in types.split(","):
         t = t.strip().lower().lstrip(".")
-        if t in ("md", "pdf"):
+        if ("." + t) in ALLOWED_WORKSPACE_EXTS:
             allowed_exts.add("." + t)
 
     items = []
@@ -422,6 +426,62 @@ def list_files(
 
     current_rel = str(target.relative_to(BASE_DIR)) if target != BASE_DIR else ""
     return {"files": items, "dir": current_rel}
+
+
+@app.post("/api/files/upload")
+def upload_files(
+    dir: str = Form(default=""),
+    replace: bool = Form(default=True),
+    files: list[UploadFile] = File(...),
+):
+    target_dir = _safe_path(dir) if dir else BASE_DIR
+    if not target_dir.is_dir():
+        raise HTTPException(status_code=400, detail="Upload target is not a directory")
+
+    saved = []
+    for upload in files:
+        name = Path(upload.filename or "").name
+        if not name:
+            raise HTTPException(status_code=400, detail="Invalid filename")
+        suffix = Path(name).suffix.lower()
+        if suffix not in ALLOWED_WORKSPACE_EXTS:
+            raise HTTPException(status_code=400, detail=f"Unsupported file type: {suffix or '(none)'}")
+
+        dest = (target_dir / name).resolve()
+        try:
+            dest.relative_to(BASE_DIR.resolve())
+        except ValueError:
+            raise HTTPException(status_code=403, detail="Destination outside allowed directory")
+        if dest.exists() and not replace:
+            raise HTTPException(status_code=409, detail=f"File already exists: {name}")
+
+        with dest.open("wb") as out:
+            while True:
+                chunk = upload.file.read(1024 * 1024)
+                if not chunk:
+                    break
+                out.write(chunk)
+
+        stat = dest.stat()
+        saved.append({
+            "name": dest.name,
+            "path": str(dest.relative_to(BASE_DIR)),
+            "size": stat.st_size,
+            "modified": stat.st_mtime,
+            "ext": suffix.lstrip("."),
+        })
+
+    return {"ok": True, "dir": str(target_dir.relative_to(BASE_DIR)) if target_dir != BASE_DIR else "", "files": saved}
+
+
+@app.get("/api/file/download")
+def download_file(path: str = Query(...)):
+    p = _safe_path(path)
+    if not p.is_file():
+        raise HTTPException(status_code=404, detail="File not found")
+    if p.suffix.lower() not in ALLOWED_WORKSPACE_EXTS:
+        raise HTTPException(status_code=400, detail="Unsupported file type")
+    return FileResponse(str(p), filename=p.name)
 
 
 @app.get("/api/file")

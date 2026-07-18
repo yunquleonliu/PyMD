@@ -228,6 +228,7 @@ html, body {
 .file-item.active { background: var(--bg3); border-left-color: var(--accent); font-weight: 600; }
 .file-item.dir    { color: var(--fg2); }
 .file-item.back   { color: var(--accent); font-size: 12px; }
+.file-item.office { color: #2563eb; }
 
 .file-icon { font-size: 12px; flex-shrink: 0; }
 
@@ -650,6 +651,66 @@ html, body {
 
 @keyframes pdf-spin {
   to { transform: rotate(360deg); }
+}
+
+/* ── Mobile server mode: iPhone can upload/view server files, not edit folders. */
+body.mobile-server-mode {
+  --toolbar-h: 48px;
+  --sidebar-w: 100vw;
+}
+
+body.mobile-server-mode .toolbar {
+  gap: 5px;
+  padding: 0 8px;
+  overflow-x: auto;
+}
+
+body.mobile-server-mode #btn-new,
+body.mobile-server-mode #btn-save,
+body.mobile-server-mode #btn-open-folder,
+body.mobile-server-mode #btn-export-word,
+body.mobile-server-mode #btn-print,
+body.mobile-server-mode .view-toggle,
+body.mobile-server-mode .toolbar-sep,
+body.mobile-server-mode .dark-toggle,
+body.mobile-server-mode .file-info,
+body.mobile-server-mode #btn-new-file,
+body.mobile-server-mode #btn-new-folder,
+body.mobile-server-mode .fmt-toolbar,
+body.mobile-server-mode .editor-pane {
+  display: none !important;
+}
+
+body.mobile-server-mode .main-layout {
+  display: grid;
+  grid-template-rows: minmax(180px, 38vh) 1fr;
+}
+
+body.mobile-server-mode .sidebar {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  border-right: none;
+  border-bottom: 1px solid var(--border);
+}
+
+body.mobile-server-mode .preview-pane {
+  min-height: 0;
+}
+
+body.mobile-server-mode .file-item {
+  padding: 11px 14px;
+  font-size: 15px;
+}
+
+body.mobile-server-mode .sidebar-header {
+  padding: 9px 12px;
+  font-size: 12px;
+}
+
+body.mobile-server-mode #preview,
+body.mobile-server-mode #pdf-viewer {
+  min-height: 100%;
 }
 
 .pdf-merge-list {

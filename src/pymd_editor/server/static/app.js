@@ -157,7 +157,12 @@ class ApiBackend {
   }
 
   async listFiles(dir = '') {
-    const resp = await fetchApi('/api/files?dir=' + encodeURIComponent(dir), {}, this.baseUrl);
+    const types = 'md,pdf,docx,xlsx,pptx';
+    const resp = await fetchApi(
+      `/api/files?dir=${encodeURIComponent(dir)}&types=${encodeURIComponent(types)}`,
+      {},
+      this.baseUrl,
+    );
     if (!resp.ok) throw new Error(`List files HTTP ${resp.status}`);
     return resp.json();     // { files, dir }
   }
@@ -483,6 +488,7 @@ const state = {
   renderTimer: null,
   statusTimer: null,
   viewMode:    'split',    // split | source | preview | wysiwyg | pdf
+  mobileServerMode: false,
 };
 
 function usingLocalFiles() {
@@ -518,6 +524,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (backendMode === 'api') {
     await loadFileTree('');
   }
+  setupMobileServerMode();
   await renderPreview();
 });
 
@@ -544,6 +551,9 @@ function wireEvents() {
   document.getElementById('btn-new').addEventListener('click', newFile);
   document.getElementById('btn-new-file').addEventListener('click', promptNewFile);
   document.getElementById('btn-save').addEventListener('click', saveFile);
+  document.getElementById('btn-upload-file').addEventListener('click', openUploadPicker);
+  document.getElementById('btn-sidebar-upload').addEventListener('click', openUploadPicker);
+  document.getElementById('upload-file-input').addEventListener('change', uploadSelectedFiles);
   document.getElementById('btn-export-word').addEventListener('click', exportWord);
   document.getElementById('btn-print').addEventListener('click', triggerPrint);
   document.getElementById('btn-open-folder').addEventListener('click', openFolder);
@@ -694,6 +704,7 @@ async function openFile(path) {
     updateWordCount();
     highlightActiveFile(filePath);
     await renderPreview();
+    if (state.mobileServerMode) setViewMode('preview');
     showStatus('Opened: ' + name);
   } catch (err) {
     showStatus('Error opening file', true);
@@ -852,6 +863,29 @@ function _triggerDownload(blob, filename) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+async function downloadServerFile(path) {
+  if (backendMode !== 'api') {
+    showStatus('Download needs a server backend', true);
+    return;
+  }
+  try {
+    showStatus('Preparing download...');
+    const resp = await fetchApi('/api/file/download?path=' + encodeURIComponent(path));
+    if (!resp.ok) {
+      const d = await resp.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${resp.status}`);
+    }
+    const disposition = resp.headers.get('Content-Disposition') || '';
+    const fallback = path.split('/').pop() || 'download';
+    const fname = disposition.match(/filename="?([^";\n]+)"?/)?.[1] || fallback;
+    _triggerDownload(await resp.blob(), fname);
+    showStatus('Downloaded: ' + fname);
+  } catch (err) {
+    showStatus('Download failed: ' + err.message, true);
+    console.error(err);
+  }
 }
 
 
@@ -1256,15 +1290,21 @@ window.renderFileTree = function(files, currentDir) {
 
   for (const f of files) {
     const isPdf = f.ext === 'pdf';
-    const icon  = f.type === 'dir' ? '📁' : (isPdf ? '📑' : '📄');
+    const isOffice = ['docx', 'xlsx', 'pptx'].includes(f.ext);
+    const icons = { pdf: '📑', docx: 'W', xlsx: 'X', pptx: 'P' };
+    const icon  = f.type === 'dir' ? '📁' : (icons[f.ext] || '📄');
     const item  = makeTreeItem(`${icon} ${f.name}`, f.path, f.type === 'dir');
     if (isPdf) item.classList.add('pdf');
+    if (isOffice) item.classList.add('office');
     if (f.path === state.currentPath) item.classList.add('active');
 
     if (f.type === 'dir') {
       item.addEventListener('click', () => loadFileTree(f.path));
     } else if (isPdf) {
       item.addEventListener('click', () => selectPdf(f.path));
+      item.addEventListener('contextmenu', e => showContextMenu(e, f.path));
+    } else if (isOffice) {
+      item.addEventListener('click', () => downloadServerFile(f.path));
       item.addEventListener('contextmenu', e => showContextMenu(e, f.path));
     } else {
       item.addEventListener('click', () => {
@@ -1277,7 +1317,7 @@ window.renderFileTree = function(files, currentDir) {
   }
 };
 
-// Patch loadFileTree to use types=md,pdf
+// Patch loadFileTree to include mobile/server workspace document types.
 const _origLoadFileTree = loadFileTree;
 window.loadFileTree = async function(dir = '') {
   const fileBackend = activeFileBackend();
@@ -1290,7 +1330,7 @@ window.loadFileTree = async function(dir = '') {
       return;
     }
 
-    const url  = `/api/files?dir=${encodeURIComponent(dir)}&types=md,pdf`;
+    const url  = `/api/files?dir=${encodeURIComponent(dir)}&types=md,pdf,docx,xlsx,pptx`;
     const resp = await fetchApi(url);
     if (!resp.ok) return;
     const { files, dir: currentDir } = await resp.json();
@@ -1322,6 +1362,74 @@ async function updatePdfInfoBar(path) {
     bar.textContent = `${d.name}  ·  ${d.pages} pages  ·  ${(d.size_bytes/1024).toFixed(0)} KB  ·  ${d.title || ''}`;
   } catch {
     bar.textContent = path.split('/').pop();
+  }
+}
+
+function openUploadPicker() {
+  if (backendMode !== 'api') {
+    showStatus('Upload needs a server backend', true);
+    return;
+  }
+  document.getElementById('upload-file-input').click();
+}
+
+async function uploadSelectedFiles(e) {
+  const input = e.target;
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  const uploadButton = document.getElementById('btn-upload-file');
+  const sidebarButton = document.getElementById('btn-sidebar-upload');
+
+  try {
+    uploadButton.disabled = true;
+    sidebarButton.disabled = true;
+    showStatus(`Uploading ${files.length} file${files.length === 1 ? '' : 's'}...`);
+
+    const form = new FormData();
+    form.append('dir', state.treeDir || '');
+    form.append('replace', 'true');
+    files.forEach(file => form.append('files', file, file.name));
+
+    const resp = await fetchApi('/api/files/upload', {
+      method: 'POST',
+      body: form,
+    });
+    if (!resp.ok) {
+      const d = await resp.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${resp.status}`);
+    }
+    const result = await resp.json();
+    await loadFileTree(result.dir || state.treeDir);
+    showStatus(`Uploaded ${result.files.length} file${result.files.length === 1 ? '' : 's'}`);
+  } catch (err) {
+    showStatus('Upload failed: ' + err.message, true);
+    console.error(err);
+  } finally {
+    input.value = '';
+    uploadButton.disabled = false;
+    sidebarButton.disabled = false;
+  }
+}
+
+function isLimitedMobileClient() {
+  const ua = navigator.userAgent || '';
+  return /iPhone|iPad|iPod/i.test(ua)
+    || (window.matchMedia('(max-width: 720px)').matches && typeof window.showDirectoryPicker !== 'function');
+}
+
+function setupMobileServerMode() {
+  state.mobileServerMode = isLimitedMobileClient();
+  document.body.classList.toggle('mobile-server-mode', state.mobileServerMode);
+  document.getElementById('btn-upload-file').classList.toggle('hidden', !state.mobileServerMode);
+  elEditor.readOnly = state.mobileServerMode;
+
+  if (state.mobileServerMode) {
+    state.fileSource = 'backend';
+    setViewMode('preview');
+    showStatus(backendMode === 'api'
+      ? 'Mobile server view: upload and preview files'
+      : 'Mobile view needs a server backend',
+      backendMode !== 'api');
   }
 }
 

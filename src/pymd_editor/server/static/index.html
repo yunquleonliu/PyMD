@@ -27,6 +27,14 @@
 
     <button class="btn" id="btn-new"  title="New file (Ctrl+N)">New</button>
     <button class="btn" id="btn-save" title="Save (Ctrl+S)">Save</button>
+    <button class="btn hidden" id="btn-upload-file" title="Upload files to server workspace">Upload</button>
+    <input
+      class="hidden"
+      id="upload-file-input"
+      type="file"
+      multiple
+      accept=".md,.pdf,.docx,.xlsx,.pptx"
+    >
     <button class="btn" id="btn-backend" title="Choose backend mode"><span id="backend-choice">Auto</span></button>
     <!-- Shown when supported; disabled with a reason on insecure LAN origins. -->
     <button class="btn hidden" id="btn-open-folder" title="Open a local folder">📂 Open Folder</button>
@@ -68,6 +76,7 @@
         <span>Files</span>
         <div class="sidebar-btns">
           <button id="btn-new-folder" title="New folder">📁+</button>
+          <button id="btn-sidebar-upload" title="Upload files">⬆</button>
           <button id="btn-new-file"   title="New file">+</button>
         </div>
       </div>
