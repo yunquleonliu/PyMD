@@ -1509,45 +1509,94 @@ async function pdfInsert() {
 
 async function pdfToWord() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
-  if (usingLocalFiles() && backendMode === 'api') {
-    await uploadLocalPdfToApi('/api/pdf/upload/to-word', pdfActivePath, '.docx');
-    return;
-  }
-  if (backendMode === 'local') {
-    await localPdfToWord(pdfActivePath);
-    return;
-  }
-  await _pdfApiDownload('/api/pdf/to-word', { path: pdfActivePath });
+  await withPdfConvertBusy('btn-pdf-toword', 'pdf-toword-status', async setStage => {
+    if (usingLocalFiles() && backendMode === 'api') {
+      await uploadLocalPdfToApi('/api/pdf/upload/to-word', pdfActivePath, '.docx', setStage);
+      return;
+    }
+    if (backendMode === 'local') {
+      setStage('Converting in browser...');
+      await localPdfToWord(pdfActivePath);
+      return;
+    }
+    await _pdfApiDownload('/api/pdf/to-word', { path: pdfActivePath }, setStage);
+  });
 }
 
 async function pdfToExcel() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
-  if (usingLocalFiles() && backendMode === 'api') {
-    await uploadLocalPdfToApi('/api/pdf/upload/to-excel', pdfActivePath, '.xlsx');
-    return;
-  }
-  if (backendMode === 'local') {
-    await localPdfToExcel(pdfActivePath);
-    return;
-  }
-  await _pdfApiDownload('/api/pdf/to-excel', { path: pdfActivePath });
+  await withPdfConvertBusy('btn-pdf-toexcel', 'pdf-toexcel-status', async setStage => {
+    if (usingLocalFiles() && backendMode === 'api') {
+      await uploadLocalPdfToApi('/api/pdf/upload/to-excel', pdfActivePath, '.xlsx', setStage);
+      return;
+    }
+    if (backendMode === 'local') {
+      setStage('Converting in browser...');
+      await localPdfToExcel(pdfActivePath);
+      return;
+    }
+    await _pdfApiDownload('/api/pdf/to-excel', { path: pdfActivePath }, setStage);
+  });
 }
 
 async function pdfToPpt() {
   if (!pdfActivePath) { showStatus('Select a PDF first', true); return; }
-  if (usingLocalFiles() && backendMode === 'api') {
-    await uploadLocalPdfToApi('/api/pdf/upload/to-ppt', pdfActivePath, '.pptx');
-    return;
-  }
-  if (backendMode === 'local') {
-    showStatus('PowerPoint export needs a backend connection', true);
-    return;
-  }
-  await _pdfApiDownload('/api/pdf/to-ppt', { path: pdfActivePath });
+  await withPdfConvertBusy('btn-pdf-toppt', 'pdf-toppt-status', async setStage => {
+    if (usingLocalFiles() && backendMode === 'api') {
+      await uploadLocalPdfToApi('/api/pdf/upload/to-ppt', pdfActivePath, '.pptx', setStage);
+      return;
+    }
+    if (backendMode === 'local') {
+      showStatus('PowerPoint export needs a backend connection', true);
+      return;
+    }
+    await _pdfApiDownload('/api/pdf/to-ppt', { path: pdfActivePath }, setStage);
+  });
 }
 
-async function _pdfApiDownload(endpoint, body) {
-  showStatus('Processing…');
+async function withPdfConvertBusy(buttonId, statusId, task) {
+  const button = document.getElementById(buttonId);
+  const status = document.getElementById(statusId);
+  const panel = status?.closest('.pdf-tab-content');
+  if (!button || button.disabled) return;
+
+  const originalText = button.textContent;
+  const setStage = text => {
+    if (status) {
+      status.textContent = text;
+      status.classList.remove('hidden');
+    }
+    showStatus(text);
+  };
+
+  button.disabled = true;
+  button.textContent = 'Working...';
+  panel?.classList.add('converting');
+  setStage('Preparing...');
+
+  try {
+    await task(setStage);
+  } finally {
+    button.disabled = false;
+    button.textContent = originalText;
+    panel?.classList.remove('converting');
+    if (status) status.classList.add('hidden');
+  }
+}
+
+function scheduleBackendConvertStage(setStage) {
+  let done = false;
+  const timer = setTimeout(() => {
+    if (!done) setStage('Converting on backend...');
+  }, 650);
+  return () => {
+    done = true;
+    clearTimeout(timer);
+  };
+}
+
+async function _pdfApiDownload(endpoint, body, setStage = showStatus) {
+  setStage('Converting on backend...');
   try {
     const resp = await fetchApi(endpoint, {
       method: 'POST',
@@ -1598,8 +1647,9 @@ async function getPdfInfo(path) {
   }
 }
 
-async function uploadLocalPdfToApi(endpoint, path, extension) {
-  showStatus('Uploading to backend…');
+async function uploadLocalPdfToApi(endpoint, path, extension, setStage = showStatus) {
+  setStage('Uploading...');
+  const finishStageTimer = scheduleBackendConvertStage(setStage);
   try {
     const file = await localFsBridge.getFile(path);
     const formData = new FormData();
@@ -1609,6 +1659,7 @@ async function uploadLocalPdfToApi(endpoint, path, extension) {
       method: 'POST',
       body: formData,
     });
+    finishStageTimer();
     if (!resp.ok) {
       const d = await resp.json().catch(() => ({}));
       throw new Error(d.detail || `HTTP ${resp.status}`);
@@ -1618,6 +1669,7 @@ async function uploadLocalPdfToApi(endpoint, path, extension) {
     _triggerDownload(await resp.blob(), fname);
     showStatus('Downloaded: ' + fname);
   } catch (err) {
+    finishStageTimer();
     showStatus('Error: ' + err.message, true);
     console.error(err);
   }

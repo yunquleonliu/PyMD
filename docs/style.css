@@ -610,6 +610,48 @@ html, body {
   white-space: nowrap;
 }
 
+.pdf-convert-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 11px;
+  border: 1px solid #f59e0b;
+  border-radius: var(--radius);
+  background: #fff7ed;
+  color: #9a3412;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.pdf-convert-status::before {
+  content: "";
+  width: 13px;
+  height: 13px;
+  border: 2px solid rgba(154, 52, 18, 0.25);
+  border-top-color: #ea580c;
+  border-radius: 50%;
+  animation: pdf-spin 0.8s linear infinite;
+}
+
+.dark .pdf-convert-status {
+  background: #431407;
+  border-color: #ea580c;
+  color: #fed7aa;
+}
+
+.dark .pdf-convert-status::before {
+  border-color: rgba(254, 215, 170, 0.25);
+  border-top-color: #fdba74;
+}
+
+.pdf-tab-content.converting {
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.12), transparent 58%);
+}
+
+@keyframes pdf-spin {
+  to { transform: rotate(360deg); }
+}
+
 .pdf-merge-list {
   min-height: 60px;
   border: 1px dashed var(--border);
